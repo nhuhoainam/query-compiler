@@ -1,4 +1,11 @@
-use nom::{IResult, combinator::peek, branch::alt, bytes::{streaming::tag, complete::tag_no_case}, InputLength, error::{ParseError, ErrorKind}, sequence::terminated};
+use nom::{
+    branch::alt,
+    bytes::{complete::tag_no_case, streaming::tag},
+    combinator::peek,
+    error::{ErrorKind, ParseError},
+    sequence::terminated,
+    IResult, InputLength,
+};
 
 pub(crate) fn eof<I: Copy + InputLength, E: ParseError<I>>(input: I) -> IResult<I, I, E> {
     if input.input_len() == 0 {
@@ -53,6 +60,7 @@ fn keyword_set_1(i: &[u8]) -> IResult<&[u8], &[u8]> {
 
 fn keyword_set_2(i: &[u8]) -> IResult<&[u8], &[u8]> {
     alt((
+        terminated(tag_no_case("IS"), char_followed_by_keyword),
         terminated(tag_no_case("IN"), char_followed_by_keyword),
         terminated(tag_no_case("LIKE"), char_followed_by_keyword),
         terminated(tag_no_case("AND"), char_followed_by_keyword),
@@ -62,10 +70,7 @@ fn keyword_set_2(i: &[u8]) -> IResult<&[u8], &[u8]> {
 
 // Matches the above SQL keywords, case-insensitive.
 pub fn sql_keywords(i: &[u8]) -> IResult<&[u8], &[u8]> {
-    alt((
-        keyword_set_1,
-        keyword_set_2,
-    ))(i)
+    alt((keyword_set_1, keyword_set_2))(i)
 }
 
 pub fn escape_if_keyword(s: &str) -> String {
