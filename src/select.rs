@@ -1,11 +1,29 @@
 use crate::{
-    common::{Attribute, FieldDefinition, Relation},
+    common::{FieldDefinitionExpression},
     condition::ConditionExpression,
 };
 
+pub enum FromItem {
+    Table(String),
+    NestedSelect(SelectStatement),
+    Join(JoinItem),
+}
+
+pub enum JoinOperator {
+    Inner,
+    Left,
+    Right,
+    Full,
+}
+
+pub struct JoinItem {
+    pub right: String,
+    pub condition: Option<ConditionExpression>,
+}
+
 pub struct SelectStatement {
-    sel_list: Vec<Attribute>,
-    from_list: Vec<Relation>,
+    sel_list: Vec<FieldDefinitionExpression>,
+    from_list: Vec<FromItem>,
     condition: Option<ConditionExpression>,
 }
 

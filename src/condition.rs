@@ -1,10 +1,12 @@
 use crate::{
-    common::{Attribute, Operator},
-    select::SelectStatement,
+    common::{Operator, Column, Literal},
+    select::SelectStatement, arithmetic::ArithmeticExpression,
 };
 
 pub enum ConditionBase {
-    Attr(Attribute),
+    Field(Column),
+    Literal(Literal),
+    LiteralList(Vec<Literal>),
     NestedSelect(Box<SelectStatement>),
 }
 
@@ -20,5 +22,6 @@ pub enum ConditionExpression {
     NegationOp(Box<ConditionExpression>),
     ExistsOp(Box<SelectStatement>),
     Base(ConditionBase),
+    Arithmetic(Box<ArithmeticExpression>),
     Bracketed(Box<ConditionExpression>),
 }
