@@ -6,7 +6,7 @@ pub struct Attribute {
 pub enum FieldDefinition {
     All,
     AllFromTable(Relation),
-    Collumn(Attribute),
+    Column(Attribute),
 }
 
 pub struct Relation {
