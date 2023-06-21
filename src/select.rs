@@ -1,27 +1,23 @@
 use crate::{
-    common::{FieldDefinitionExpression},
-    condition::ConditionExpression,
+    common::FieldDefinitionExpression,
+    condition::ConditionExpression, join::{JoinOperator, JoinOperand}, table::Table,
 };
 
 pub enum FromItem {
-    Table(String),
+    Table(Table),
     NestedSelect(SelectStatement),
-    Join(JoinItem),
+    Join(JoinClause),
 }
 
-pub enum JoinOperator {
-    Inner,
-    Left,
-    Right,
-    Full,
-}
-
-pub struct JoinItem {
-    pub right: String,
+pub struct JoinClause {
+    pub operator: JoinOperator,
+    pub left: JoinOperand,
+    pub right: JoinOperand,
     pub condition: Option<ConditionExpression>,
 }
 
 pub struct SelectStatement {
+    distinct: bool,
     sel_list: Vec<FieldDefinitionExpression>,
     from_list: Vec<FromItem>,
     condition: Option<ConditionExpression>,

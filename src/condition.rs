@@ -11,8 +11,8 @@ pub enum ConditionBase {
 }
 
 pub struct ConditionTree {
-    left: Box<ConditionExpression>,
     operator: Operator,
+    left: Box<ConditionExpression>,
     right: Box<ConditionExpression>,
 }
 
