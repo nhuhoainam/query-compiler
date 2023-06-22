@@ -12,7 +12,7 @@ use nom::{
     IResult, InputLength, Parser,
 };
 
-use crate::{arithmetic::ArithmeticExpression, keywords::sql_keywords};
+use crate::{arithmetic::ArithmeticExpression, keywords::sql_keywords, table::Table};
 use std::str::{self, FromStr};
 
 pub struct Column {
@@ -23,7 +23,7 @@ pub struct Column {
 
 pub enum FieldDefinitionExpression {
     All,
-    AllFromTable(String),
+    AllFromTable(Table),
     Column(Column),
     FieldValue(FieldValueExpression),
 }
@@ -169,6 +169,18 @@ pub fn column_identifier(i: &[u8]) -> IResult<&[u8], Column> {
             },
         },
     )(i)
+}
+
+/// Parse a reference to a named table, with an optional alias
+pub fn table_reference(i: &[u8]) -> IResult<&[u8], Table> {
+    map(pair(sql_identifier, opt(as_alias)), |tup| Table {
+        name: String::from(str::from_utf8(tup.0).unwrap()),
+        alias: match tup.1 {
+            Some(a) => Some(String::from(a)),
+            None => None,
+        },
+		schema: None,
+    })(i)
 }
 
 pub(crate) fn eof<I: Copy + InputLength, E: ParseError<I>>(input: I) -> IResult<I, I, E> {

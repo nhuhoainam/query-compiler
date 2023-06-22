@@ -1,6 +1,6 @@
-use crate::{table::Table, select::{SelectStatement, JoinClause}};
+use crate::{table::Table, select::{SelectStatement, JoinClause}, common::Column, condition::ConditionExpression};
 
-pub enum JoinOperand {
+pub enum JoinRightHand {
     Table(Table),
     // A comma-separated (and implicitly joined) sequence of tables.
     Tables(Vec<Table>),
@@ -16,4 +16,9 @@ pub enum JoinOperator {
     FullOuter,
     Cross,
     Natural,
+}
+
+pub enum JoinConstraint {
+    On(ConditionExpression),
+    Using(Vec<Column>),
 }

@@ -1,6 +1,21 @@
+use std::vec;
+
+use nom::{
+    branch::alt,
+    bytes::complete::tag,
+    combinator::{map, opt},
+    multi::many0,
+    sequence::{pair, terminated},
+};
+
 use crate::{
-    common::FieldDefinitionExpression,
-    condition::ConditionExpression, join::{JoinOperator, JoinOperand}, table::Table,
+    common::{
+        column_identifier, literal_expression, table_reference, ws_sep_comma,
+        FieldDefinitionExpression, FieldValueExpression,
+    },
+    condition::ConditionExpression,
+    join::{JoinOperator, JoinRightHand},
+    table::Table,
 };
 
 pub enum FromItem {
@@ -11,17 +26,39 @@ pub enum FromItem {
 
 pub struct JoinClause {
     pub operator: JoinOperator,
-    pub left: JoinOperand,
-    pub right: JoinOperand,
-    pub condition: Option<ConditionExpression>,
+    pub right: JoinRightHand,
+    pub condition: JoinConstraint,
 }
 
 pub struct SelectStatement {
     distinct: bool,
     sel_list: Vec<FieldDefinitionExpression>,
-    from_list: Vec<FromItem>,
+    tables: Vec<Table>,
+    join: Vec<JoinClause>,
     condition: Option<ConditionExpression>,
 }
+
+pub fn field_definition_expression(
+    i: &[u8],
+) -> nom::IResult<&[u8], Vec<FieldDefinitionExpression>> {
+    many0(terminated(
+        alt((
+            map(tag("*"), |_| FieldDefinitionExpression::All),
+            map(terminated(table_reference, tag(".*")), |table| {
+                FieldDefinitionExpression::AllFromTable(table)
+            }),
+            map(column_identifier, |col| {
+                FieldDefinitionExpression::Column(col)
+            }),
+            map(literal_expression, |lit| {
+                FieldDefinitionExpression::FieldValue(FieldValueExpression::Literal(lit))
+            }),
+        )),
+        opt(ws_sep_comma),
+    ))(i)
+}
+
+
 
 pub fn select_statement(i: &[u8]) -> nom::IResult<&[u8], SelectStatement> {
     todo!()

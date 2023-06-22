@@ -1,3 +1,5 @@
+use nom::{branch::alt, combinator::map, bytes::complete::tag};
+
 use crate::common::{Column, Literal};
 
 pub struct Arithmetic {
@@ -56,3 +58,18 @@ impl ArithmeticExpression {
         }
     }
 }
+
+fn add_sub_operator(i: &[u8]) -> nom::IResult<&[u8], ArithmeticOperator> {
+    alt((
+        map(tag("+"), |_| ArithmeticOperator::Add),
+        map(tag("-"), |_| ArithmeticOperator::Subtract),
+    ))(i)
+}
+
+fn mul_div_operator(i: &[u8]) -> nom::IResult<&[u8], ArithmeticOperator> {
+    alt((
+        map(tag("*"), |_| ArithmeticOperator::Multiply),
+        map(tag("/"), |_| ArithmeticOperator::Divide),
+    ))(i)
+}
+
