@@ -8,7 +8,7 @@ pub struct Arithmetic {
 
 pub enum ArithmeticBase {
     Column(Column),
-    Literal(Literal),
+    Scalar(Literal),
     Bracketed(Box<Arithmetic>)
 }
 
