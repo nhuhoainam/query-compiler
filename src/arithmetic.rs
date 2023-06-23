@@ -2,33 +2,35 @@ use nom::{
     branch::alt,
     bytes::complete::tag,
     character::complete::multispace0,
-    combinator::map,
+    combinator::{map, opt},
     multi::many0,
     sequence::{delimited, pair, preceded, separated_pair, terminated},
     IResult,
 };
 
-use crate::common::{
-    column_identifier_no_alias, integer_literal, opt_delimited, sql_identifier, Column, Literal,
-};
+use crate::common::{as_alias, column_identifier_no_alias, integer_literal, Column, Literal};
 
+#[derive(Debug, PartialEq)]
 pub struct Arithmetic {
     pub operator: ArithmeticOperator,
     pub left: ArithmeticOperand,
     pub right: ArithmeticOperand,
 }
 
+#[derive(Debug, PartialEq)]
 pub enum ArithmeticBase {
     Column(Column),
     Scalar(Literal),
     Bracketed(Box<Arithmetic>),
 }
 
+#[derive(Debug, PartialEq)]
 pub enum ArithmeticOperand {
     Base(ArithmeticBase),
     Expression(Box<Arithmetic>),
 }
 
+#[derive(Debug, PartialEq)]
 pub enum ArithmeticOperator {
     Add,
     Subtract,
@@ -36,6 +38,7 @@ pub enum ArithmeticOperator {
     Divide,
 }
 
+#[derive(Debug, PartialEq)]
 pub struct ArithmeticExpression {
     pub ari: Arithmetic,
     pub alias: Option<String>,
@@ -105,9 +108,9 @@ fn arithmetic(i: &[u8]) -> IResult<&[u8], Arithmetic> {
 
     match res.1 {
         ArithmeticOperand::Base(ArithmeticBase::Column(_))
-        | ArithmeticOperand::Base(ArithmeticBase::Scalar(_)) => {
-            Err(nom::Err::Error(nom::error::Error::new(i, nom::error::ErrorKind::Tag)))
-        } // no operator
+        | ArithmeticOperand::Base(ArithmeticBase::Scalar(_)) => Err(nom::Err::Error(
+            nom::error::Error::new(i, nom::error::ErrorKind::Tag),
+        )), // no operator
         ArithmeticOperand::Base(ArithmeticBase::Bracketed(expr)) => Ok((res.0, *expr)),
         ArithmeticOperand::Expression(expr) => Ok((res.0, *expr)),
     }
@@ -140,19 +143,443 @@ fn term_rest(i: &[u8]) -> IResult<&[u8], (ArithmeticOperator, ArithmeticOperand)
 /// Parse an expression
 /// expression is an arithmetic expression with addition or subtraction
 fn expr(i: &[u8]) -> IResult<&[u8], ArithmeticOperand> {
-    map(pair(arithmetic_base, many0(expr_rest)), |(b, rs)| {
-        rs.into_iter()
-            .fold(ArithmeticOperand::Base(b), |acc, (op, r)| {
-                ArithmeticOperand::Expression(Box::new(Arithmetic {
-                    operator: op,
-                    left: acc,
-                    right: r,
-                }))
-            })
+    map(pair(term, many0(expr_rest)), |(operand, rs)| {
+        rs.into_iter().fold(operand, |acc, (op, r)| {
+            ArithmeticOperand::Expression(Box::new(Arithmetic {
+                operator: op,
+                left: acc,
+                right: r,
+            }))
+        })
     })(i)
 }
 
 /// Parse right hand side of the Expression
 fn expr_rest(i: &[u8]) -> IResult<&[u8], (ArithmeticOperator, ArithmeticOperand)> {
     separated_pair(preceded(multispace0, add_sub_operator), multispace0, term)(i)
+}
+
+/// Parse simple arithmetic expressions combining literals, and columns and literals.
+pub fn arithmetic_expression(i: &[u8]) -> IResult<&[u8], ArithmeticExpression> {
+    map(pair(arithmetic, opt(as_alias)), |(ari, opt_alias)| {
+        ArithmeticExpression {
+            ari,
+            alias: opt_alias.map(String::from),
+        }
+    })(i)
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::common::{Column, Literal};
+
+    use super::*;
+
+    #[test]
+    fn simple_arithmetic() {
+        let inputs = ["1 + 1", "3 * 4", "foo - bar", "bar / 2"];
+        let expected_outputs = [
+            ArithmeticExpression::new(
+                ArithmeticBase::Scalar(Literal::Integer(1)),
+                ArithmeticBase::Scalar(Literal::Integer(1)),
+                ArithmeticOperator::Add,
+                None,
+            ),
+            ArithmeticExpression::new(
+                ArithmeticBase::Scalar(Literal::Integer(3)),
+                ArithmeticBase::Scalar(Literal::Integer(4)),
+                ArithmeticOperator::Multiply,
+                None,
+            ),
+            ArithmeticExpression::new(
+                ArithmeticBase::Column(Column {
+                    name: String::from("foo"),
+                    alias: None,
+                    table: None,
+                }),
+                ArithmeticBase::Column(Column {
+                    name: String::from("bar"),
+                    alias: None,
+                    table: None,
+                }),
+                ArithmeticOperator::Subtract,
+                None,
+            ),
+            ArithmeticExpression::new(
+                ArithmeticBase::Column(Column {
+                    name: String::from("bar"),
+                    alias: None,
+                    table: None,
+                }),
+                ArithmeticBase::Scalar(Literal::Integer(2)),
+                ArithmeticOperator::Divide,
+                None,
+            ),
+        ];
+        for (i, input) in inputs.iter().enumerate() {
+            let res = arithmetic_expression(input.as_bytes());
+            assert_eq!(res.unwrap().1, expected_outputs[i]);
+        }
+    }
+
+    #[test]
+    fn arithmetic_with_alias() {
+        let inputs = [
+            "1 + 1 as foo",
+            "3 * 4 as bar",
+            "foo - bar as baz",
+            "bar / 2 as qux",
+        ];
+        let expected_outputs = [
+            ArithmeticExpression::new(
+                ArithmeticBase::Scalar(Literal::Integer(1)),
+                ArithmeticBase::Scalar(Literal::Integer(1)),
+                ArithmeticOperator::Add,
+                Some(String::from("foo")),
+            ),
+            ArithmeticExpression::new(
+                ArithmeticBase::Scalar(Literal::Integer(3)),
+                ArithmeticBase::Scalar(Literal::Integer(4)),
+                ArithmeticOperator::Multiply,
+                Some(String::from("bar")),
+            ),
+            ArithmeticExpression::new(
+                ArithmeticBase::Column(Column {
+                    name: String::from("foo"),
+                    alias: None,
+                    table: None,
+                }),
+                ArithmeticBase::Column(Column {
+                    name: String::from("bar"),
+                    alias: None,
+                    table: None,
+                }),
+                ArithmeticOperator::Subtract,
+                Some(String::from("baz")),
+            ),
+            ArithmeticExpression::new(
+                ArithmeticBase::Column(Column {
+                    name: String::from("bar"),
+                    alias: None,
+                    table: None,
+                }),
+                ArithmeticBase::Scalar(Literal::Integer(2)),
+                ArithmeticOperator::Divide,
+                Some(String::from("qux")),
+            ),
+        ];
+        for (i, input) in inputs.iter().enumerate() {
+            let res = arithmetic_expression(input.as_bytes());
+            assert_eq!(res.unwrap().1, expected_outputs[i]);
+        }
+    }
+
+    #[test]
+    fn nested_arithmetic() {
+        let inputs = [
+            "1 + 1 + 1",
+            "3 * (4 + 5)",
+            "foo - bar + baz",
+            "bar / 2 + 3",
+            "1 + 1 * 2",
+            "3 * 4 - 5",
+            "foo - bar * baz",
+            "bar / 2 / 3",
+        ];
+        let expected_outputs = [
+            ArithmeticExpression {
+                ari: Arithmetic {
+                    operator: ArithmeticOperator::Add,
+                    left: ArithmeticOperand::Expression(Box::new(Arithmetic {
+                        operator: ArithmeticOperator::Add,
+                        left: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(1))),
+                        right: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(1))),
+                    })),
+                    right: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(1))),
+                },
+                alias: None,
+            },
+            ArithmeticExpression {
+                ari: Arithmetic {
+                    operator: ArithmeticOperator::Multiply,
+                    left: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(3))),
+                    right: ArithmeticOperand::Base(ArithmeticBase::Bracketed(Box::new(
+                        Arithmetic {
+                            operator: ArithmeticOperator::Add,
+                            left: ArithmeticOperand::Base(ArithmeticBase::Scalar(
+                                Literal::Integer(4),
+                            )),
+                            right: ArithmeticOperand::Base(ArithmeticBase::Scalar(
+                                Literal::Integer(5),
+                            )),
+                        },
+                    ))),
+                },
+                alias: None,
+            },
+            ArithmeticExpression {
+                ari: Arithmetic {
+                    operator: ArithmeticOperator::Add,
+                    left: ArithmeticOperand::Expression(Box::new(Arithmetic {
+                        operator: ArithmeticOperator::Subtract,
+                        left: ArithmeticOperand::Base(ArithmeticBase::Column(Column {
+                            name: String::from("foo"),
+                            alias: None,
+                            table: None,
+                        })),
+                        right: ArithmeticOperand::Base(ArithmeticBase::Column(Column {
+                            name: String::from("bar"),
+                            alias: None,
+                            table: None,
+                        })),
+                    })),
+                    right: ArithmeticOperand::Base(ArithmeticBase::Column(Column {
+                        name: String::from("baz"),
+                        alias: None,
+                        table: None,
+                    })),
+                },
+                alias: None,
+            },
+            ArithmeticExpression {
+                ari: Arithmetic {
+                    operator: ArithmeticOperator::Add,
+                    left: ArithmeticOperand::Expression(Box::new(Arithmetic {
+                        operator: ArithmeticOperator::Divide,
+                        left: ArithmeticOperand::Base(ArithmeticBase::Column(Column {
+                            name: String::from("bar"),
+                            alias: None,
+                            table: None,
+                        })),
+                        right: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(2))),
+                    })),
+                    right: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(3))),
+                },
+                alias: None,
+            },
+            ArithmeticExpression {
+                ari: Arithmetic {
+                    operator: ArithmeticOperator::Add,
+                    left: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(1))),
+                    right: ArithmeticOperand::Expression(Box::new(Arithmetic {
+                        operator: ArithmeticOperator::Multiply,
+                        left: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(1))),
+                        right: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(2))),
+                    })),
+                },
+                alias: None,
+            },
+            ArithmeticExpression {
+                ari: Arithmetic {
+                    operator: ArithmeticOperator::Subtract,
+                    left: ArithmeticOperand::Expression(Box::new(Arithmetic {
+                        operator: ArithmeticOperator::Multiply,
+                        left: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(3))),
+                        right: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(4))),
+                    })),
+                    right: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(5))),
+                },
+                alias: None,
+            },
+            ArithmeticExpression {
+                ari: Arithmetic {
+                    operator: ArithmeticOperator::Subtract,
+                    left: ArithmeticOperand::Base(ArithmeticBase::Column(Column {
+                        name: String::from("foo"),
+                        alias: None,
+                        table: None,
+                    })),
+                    right: ArithmeticOperand::Expression(Box::new(Arithmetic {
+                        operator: ArithmeticOperator::Multiply,
+                        left: ArithmeticOperand::Base(ArithmeticBase::Column(Column {
+                            name: String::from("bar"),
+                            alias: None,
+                            table: None,
+                        })),
+                        right: ArithmeticOperand::Base(ArithmeticBase::Column(Column {
+                            name: String::from("baz"),
+                            alias: None,
+                            table: None,
+                        })),
+                    })),
+                },
+                alias: None,
+            },
+            ArithmeticExpression {
+                ari: Arithmetic {
+                    operator: ArithmeticOperator::Divide,
+                    left: ArithmeticOperand::Expression(Box::new(Arithmetic {
+                        operator: ArithmeticOperator::Divide,
+                        left: ArithmeticOperand::Base(ArithmeticBase::Column(Column {
+                            name: String::from("bar"),
+                            alias: None,
+                            table: None,
+                        })),
+                        right: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(2))),
+                    })),
+                    right: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(3))),
+                },
+                alias: None,
+            },
+        ];
+        for (i, input) in inputs.iter().enumerate() {
+            let res = arithmetic_expression(input.as_bytes());
+            assert_eq!(res.unwrap().1, expected_outputs[i]);
+        }
+    }
+
+    #[test]
+    fn nested_arithmetic_with_alias() {
+        let inputs = [
+            "1 + 1 + 1 as foo",
+            "3 * (4 + 5) as bar",
+            "foo - bar + baz as baz",
+            "bar / 2 + 3 as qux",
+            "1 + 1 * 2 as foo",
+            "3 * 4 - 5 as bar",
+            "foo - bar * baz as baz",
+            "bar / 2 / 3 as qux",
+        ];
+
+        let expected_outputs = [
+            ArithmeticExpression {
+                ari: Arithmetic {
+                    operator: ArithmeticOperator::Add,
+                    left: ArithmeticOperand::Expression(Box::new(Arithmetic {
+                        operator: ArithmeticOperator::Add,
+                        left: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(1))),
+                        right: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(1))),
+                    })),
+                    right: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(1))),
+                },
+                alias: Some(String::from("foo")),
+            },
+            ArithmeticExpression {
+                ari: Arithmetic {
+                    operator: ArithmeticOperator::Multiply,
+                    left: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(3))),
+                    right: ArithmeticOperand::Base(ArithmeticBase::Bracketed(Box::new(
+                        Arithmetic {
+                            operator: ArithmeticOperator::Add,
+                            left: ArithmeticOperand::Base(ArithmeticBase::Scalar(
+                                Literal::Integer(4),
+                            )),
+                            right: ArithmeticOperand::Base(ArithmeticBase::Scalar(
+                                Literal::Integer(5),
+                            )),
+                        },
+                    ))),
+                },
+                alias: Some(String::from("bar")),
+            },
+            ArithmeticExpression {
+                ari: Arithmetic {
+                    operator: ArithmeticOperator::Add,
+                    left: ArithmeticOperand::Expression(Box::new(Arithmetic {
+                        operator: ArithmeticOperator::Subtract,
+                        left: ArithmeticOperand::Base(ArithmeticBase::Column(Column {
+                            name: String::from("foo"),
+                            alias: None,
+                            table: None,
+                        })),
+                        right: ArithmeticOperand::Base(ArithmeticBase::Column(Column {
+                            name: String::from("bar"),
+                            alias: None,
+                            table: None,
+                        })),
+                    })),
+                    right: ArithmeticOperand::Base(ArithmeticBase::Column(Column {
+                        name: String::from("baz"),
+                        alias: None,
+                        table: None,
+                    })),
+                },
+                alias: Some(String::from("baz")),
+            },
+            ArithmeticExpression {
+                ari: Arithmetic {
+                    operator: ArithmeticOperator::Add,
+                    left: ArithmeticOperand::Expression(Box::new(Arithmetic {
+                        operator: ArithmeticOperator::Divide,
+                        left: ArithmeticOperand::Base(ArithmeticBase::Column(Column {
+                            name: String::from("bar"),
+                            alias: None,
+                            table: None,
+                        })),
+                        right: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(2))),
+                    })),
+                    right: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(3))),
+                },
+                alias: Some(String::from("qux")),
+            },
+            ArithmeticExpression {
+                ari: Arithmetic {
+                    operator: ArithmeticOperator::Add,
+                    left: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(1))),
+                    right: ArithmeticOperand::Expression(Box::new(Arithmetic {
+                        operator: ArithmeticOperator::Multiply,
+                        left: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(1))),
+                        right: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(2))),
+                    })),
+                },
+                alias: Some(String::from("foo")),
+            },
+            ArithmeticExpression {
+                ari: Arithmetic {
+                    operator: ArithmeticOperator::Subtract,
+                    left: ArithmeticOperand::Expression(Box::new(Arithmetic {
+                        operator: ArithmeticOperator::Multiply,
+                        left: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(3))),
+                        right: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(4))),
+                    })),
+                    right: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(5))),
+                },
+                alias: Some(String::from("bar")),
+            },
+            ArithmeticExpression {
+                ari: Arithmetic {
+                    operator: ArithmeticOperator::Subtract,
+                    left: ArithmeticOperand::Base(ArithmeticBase::Column(Column {
+                        name: String::from("foo"),
+                        alias: None,
+                        table: None,
+                    })),
+                    right: ArithmeticOperand::Expression(Box::new(Arithmetic {
+                        operator: ArithmeticOperator::Multiply,
+                        left: ArithmeticOperand::Base(ArithmeticBase::Column(Column {
+                            name: String::from("bar"),
+                            alias: None,
+                            table: None,
+                        })),
+                        right: ArithmeticOperand::Base(ArithmeticBase::Column(Column {
+                            name: String::from("baz"),
+                            alias: None,
+                            table: None,
+                        })),
+                    })),
+                },
+                alias: Some(String::from("baz")),
+            },
+            ArithmeticExpression {
+                ari: Arithmetic {
+                    operator: ArithmeticOperator::Divide,
+                    left: ArithmeticOperand::Expression(Box::new(Arithmetic {
+                        operator: ArithmeticOperator::Divide,
+                        left: ArithmeticOperand::Base(ArithmeticBase::Column(Column {
+                            name: String::from("bar"),
+                            alias: None,
+                            table: None,
+                        })),
+                        right: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(2))),
+                    })),
+                    right: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(3))),
+                },
+                alias: Some(String::from("qux")),
+            },
+        ];
+        for (i, input) in inputs.iter().enumerate() {
+            let res = arithmetic_expression(input.as_bytes());
+            assert_eq!(res.unwrap().1, expected_outputs[i]);
+        }
+    }
 }

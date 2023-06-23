@@ -15,6 +15,7 @@ use nom::{
 use crate::{arithmetic::ArithmeticExpression, keywords::sql_keywords, table::Table};
 use std::str::{self, FromStr};
 
+#[derive(Debug, PartialEq)]
 pub struct Column {
     pub name: String,
     pub alias: Option<String>,
@@ -49,11 +50,13 @@ pub enum Operator {
     Is,
 }
 
+#[derive(Debug, PartialEq)]
 pub struct Real {
     pub integral: i32,
     pub fractional: i32,
 }
 
+#[derive(Debug, PartialEq)]
 pub enum Literal {
     Null,
     String(String),
