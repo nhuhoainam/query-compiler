@@ -278,6 +278,7 @@ dependencies = [
  "nom 7.1.3",
  "ptree",
  "serde 1.0.164",
+ "serde_derive",
 ]
 
 [[package]]

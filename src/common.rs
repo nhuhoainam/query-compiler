@@ -12,15 +12,16 @@ use nom::{
     IResult, InputLength, Parser,
 };
 
-use crate::{arithmetic::ArithmeticExpression, keywords::sql_keywords, table::Table};
-use std::str::{self, FromStr};
-
-#[derive(Debug, PartialEq)]
-pub struct Column {
-    pub name: String,
-    pub alias: Option<String>,
-    pub table: Option<String>,
-}
+use crate::{
+    arithmetic::ArithmeticExpression,
+    column::Column,
+    keywords::sql_keywords,
+    table::Table,
+};
+use std::{
+    fmt,
+    str::{self, FromStr},
+};
 
 pub enum FieldDefinitionExpression {
     All,
@@ -50,19 +51,18 @@ pub enum Operator {
     Is,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub struct Real {
     pub integral: i32,
     pub fractional: i32,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub enum Literal {
     Null,
     String(String),
     Blob(Vec<u8>),
     Integer(i64),
-    Decimal(f64),
     FixedPoint(Real),
     DateTime(String),
 }
@@ -70,6 +70,64 @@ pub enum Literal {
 pub struct LiteralExpression {
     pub value: Literal,
     pub alias: Option<String>,
+}
+
+impl ToString for Literal {
+    fn to_string(&self) -> String {
+        match *self {
+            Literal::Null => "NULL".to_string(),
+            Literal::String(ref s) => format!("'{}'", s.replace('\'', "''")),
+            Literal::Blob(ref bv) => format!(
+                "{}",
+                bv.iter()
+                    .map(|v| format!("{:x}", v))
+                    .collect::<Vec<String>>()
+                    .join(" ")
+            ),
+            Literal::Integer(ref i) => format!("{}", i),
+            Literal::FixedPoint(ref f) => format!("{}.{}", f.integral, f.fractional),
+            Literal::DateTime(ref dt) => format!("{}", dt),
+        }
+    }
+}
+
+impl From<Literal> for LiteralExpression {
+    fn from(l: Literal) -> Self {
+        LiteralExpression {
+            value: l,
+            alias: None,
+        }
+    }
+}
+
+impl fmt::Display for LiteralExpression {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self.alias {
+            Some(ref alias) => write!(f, "{} AS {}", self.value.to_string(), alias),
+            None => write!(f, "{}", self.value.to_string()),
+        }
+    }
+}
+
+impl fmt::Display for Operator {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let op = match *self {
+            Operator::And => "AND",
+            Operator::Or => "OR",
+            Operator::Like => "LIKE",
+            Operator::NotLike => "NOT_LIKE",
+            Operator::Equal => "=",
+            Operator::NotEqual => "!=",
+            Operator::Greater => ">",
+            Operator::GreaterOrEqual => ">=",
+            Operator::Less => "<",
+            Operator::LessOrEqual => "<=",
+            Operator::In => "IN",
+            Operator::NotIn => "NOT IN",
+            Operator::Is => "IS",
+        };
+        write!(f, "{}", op)
+    }
 }
 
 #[inline]
@@ -149,6 +207,7 @@ pub fn column_identifier_no_alias(i: &[u8]) -> IResult<&[u8], Column> {
             None => None,
             Some(t) => Some(str::from_utf8(t).unwrap().to_string()),
         },
+        function: None,
     })(i)
 }
 
@@ -170,6 +229,7 @@ pub fn column_identifier(i: &[u8]) -> IResult<&[u8], Column> {
                 None => None,
                 Some(t) => Some(str::from_utf8(t).unwrap().to_string()),
             },
+            function: None,
         },
     )(i)
 }
@@ -182,7 +242,7 @@ pub fn table_reference(i: &[u8]) -> IResult<&[u8], Table> {
             Some(a) => Some(String::from(a)),
             None => None,
         },
-		schema: None,
+        schema: None,
     })(i)
 }
 

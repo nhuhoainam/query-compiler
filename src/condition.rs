@@ -1,6 +1,8 @@
 use crate::{
-    common::{Operator, Column, Literal},
-    select::SelectStatement, arithmetic::ArithmeticExpression,
+    arithmetic::ArithmeticExpression,
+    column::Column,
+    common::{Literal, Operator},
+    select::SelectStatement,
 };
 
 pub enum ConditionBase {

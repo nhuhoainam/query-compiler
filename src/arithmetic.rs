@@ -1,3 +1,5 @@
+use std::fmt::{self, Formatter};
+
 use nom::{
     branch::alt,
     bytes::complete::tag,
@@ -8,29 +10,32 @@ use nom::{
     IResult,
 };
 
-use crate::common::{as_alias, column_identifier_no_alias, integer_literal, Column, Literal};
+use crate::{
+    column::Column,
+    common::{as_alias, column_identifier_no_alias, integer_literal, Literal},
+};
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub struct Arithmetic {
     pub operator: ArithmeticOperator,
     pub left: ArithmeticOperand,
     pub right: ArithmeticOperand,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub enum ArithmeticBase {
     Column(Column),
     Scalar(Literal),
     Bracketed(Box<Arithmetic>),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub enum ArithmeticOperand {
     Base(ArithmeticBase),
     Expression(Box<Arithmetic>),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub enum ArithmeticOperator {
     Add,
     Subtract,
@@ -38,7 +43,7 @@ pub enum ArithmeticOperator {
     Divide,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub struct ArithmeticExpression {
     pub ari: Arithmetic,
     pub alias: Option<String>,
@@ -68,6 +73,51 @@ impl ArithmeticExpression {
                 right: ArithmeticOperand::Base(right),
             },
             alias,
+        }
+    }
+}
+
+impl fmt::Display for ArithmeticOperator {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            ArithmeticOperator::Add => write!(f, "+"),
+            ArithmeticOperator::Subtract => write!(f, "-"),
+            ArithmeticOperator::Multiply => write!(f, "*"),
+            ArithmeticOperator::Divide => write!(f, "/"),
+        }
+    }
+}
+
+impl fmt::Display for ArithmeticBase {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            ArithmeticBase::Column(ref col) => write!(f, "{}", col),
+            ArithmeticBase::Scalar(ref lit) => write!(f, "{}", lit.to_string()),
+            ArithmeticBase::Bracketed(ref ari) => write!(f, "({})", ari),
+        }
+    }
+}
+
+impl fmt::Display for ArithmeticOperand {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            ArithmeticOperand::Base(ref b) => write!(f, "{}", b),
+            ArithmeticOperand::Expression(ref expr) => write!(f, "{}", expr),
+        }
+    }
+}
+
+impl fmt::Display for Arithmetic {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{} {} {}", self.left, self.operator, self.right)
+    }
+}
+
+impl fmt::Display for ArithmeticExpression {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self.alias {
+            Some(ref alias) => write!(f, "{} AS {}", self.ari, alias),
+            None => write!(f, "{}", self.ari),
         }
     }
 }
@@ -171,7 +221,7 @@ pub fn arithmetic_expression(i: &[u8]) -> IResult<&[u8], ArithmeticExpression> {
 
 #[cfg(test)]
 mod tests {
-    use crate::common::{Column, Literal};
+    use crate::{column::Column, common::Literal};
 
     use super::*;
 
@@ -196,11 +246,13 @@ mod tests {
                     name: String::from("foo"),
                     alias: None,
                     table: None,
+                    function: None,
                 }),
                 ArithmeticBase::Column(Column {
                     name: String::from("bar"),
                     alias: None,
                     table: None,
+                    function: None,
                 }),
                 ArithmeticOperator::Subtract,
                 None,
@@ -210,6 +262,7 @@ mod tests {
                     name: String::from("bar"),
                     alias: None,
                     table: None,
+                    function: None,
                 }),
                 ArithmeticBase::Scalar(Literal::Integer(2)),
                 ArithmeticOperator::Divide,
@@ -248,11 +301,13 @@ mod tests {
                     name: String::from("foo"),
                     alias: None,
                     table: None,
+                    function: None,
                 }),
                 ArithmeticBase::Column(Column {
                     name: String::from("bar"),
                     alias: None,
                     table: None,
+                    function: None,
                 }),
                 ArithmeticOperator::Subtract,
                 Some(String::from("baz")),
@@ -262,6 +317,7 @@ mod tests {
                     name: String::from("bar"),
                     alias: None,
                     table: None,
+                    function: None,
                 }),
                 ArithmeticBase::Scalar(Literal::Integer(2)),
                 ArithmeticOperator::Divide,
@@ -326,17 +382,20 @@ mod tests {
                             name: String::from("foo"),
                             alias: None,
                             table: None,
+                            function: None,
                         })),
                         right: ArithmeticOperand::Base(ArithmeticBase::Column(Column {
                             name: String::from("bar"),
                             alias: None,
                             table: None,
+                            function: None,
                         })),
                     })),
                     right: ArithmeticOperand::Base(ArithmeticBase::Column(Column {
                         name: String::from("baz"),
                         alias: None,
                         table: None,
+                        function: None,
                     })),
                 },
                 alias: None,
@@ -350,6 +409,7 @@ mod tests {
                             name: String::from("bar"),
                             alias: None,
                             table: None,
+                            function: None,
                         })),
                         right: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(2))),
                     })),
@@ -388,6 +448,7 @@ mod tests {
                         name: String::from("foo"),
                         alias: None,
                         table: None,
+                        function: None,
                     })),
                     right: ArithmeticOperand::Expression(Box::new(Arithmetic {
                         operator: ArithmeticOperator::Multiply,
@@ -395,11 +456,13 @@ mod tests {
                             name: String::from("bar"),
                             alias: None,
                             table: None,
+                            function: None,
                         })),
                         right: ArithmeticOperand::Base(ArithmeticBase::Column(Column {
                             name: String::from("baz"),
                             alias: None,
                             table: None,
+                            function: None,
                         })),
                     })),
                 },
@@ -414,6 +477,7 @@ mod tests {
                             name: String::from("bar"),
                             alias: None,
                             table: None,
+                            function: None,
                         })),
                         right: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(2))),
                     })),
@@ -481,17 +545,20 @@ mod tests {
                             name: String::from("foo"),
                             alias: None,
                             table: None,
+                            function: None,
                         })),
                         right: ArithmeticOperand::Base(ArithmeticBase::Column(Column {
                             name: String::from("bar"),
                             alias: None,
                             table: None,
+                            function: None,
                         })),
                     })),
                     right: ArithmeticOperand::Base(ArithmeticBase::Column(Column {
                         name: String::from("baz"),
                         alias: None,
                         table: None,
+                        function: None,
                     })),
                 },
                 alias: Some(String::from("baz")),
@@ -505,6 +572,7 @@ mod tests {
                             name: String::from("bar"),
                             alias: None,
                             table: None,
+                            function: None,
                         })),
                         right: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(2))),
                     })),
@@ -543,6 +611,7 @@ mod tests {
                         name: String::from("foo"),
                         alias: None,
                         table: None,
+                        function: None,
                     })),
                     right: ArithmeticOperand::Expression(Box::new(Arithmetic {
                         operator: ArithmeticOperator::Multiply,
@@ -550,11 +619,13 @@ mod tests {
                             name: String::from("bar"),
                             alias: None,
                             table: None,
+                            function: None,
                         })),
                         right: ArithmeticOperand::Base(ArithmeticBase::Column(Column {
                             name: String::from("baz"),
                             alias: None,
                             table: None,
+                            function: None,
                         })),
                     })),
                 },
@@ -569,6 +640,7 @@ mod tests {
                             name: String::from("bar"),
                             alias: None,
                             table: None,
+                            function: None,
                         })),
                         right: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(2))),
                     })),

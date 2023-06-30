@@ -1,11 +1,9 @@
-use std::vec;
-
 use nom::{
     branch::alt,
     bytes::complete::tag,
     combinator::{map, opt},
     multi::many0,
-    sequence::{pair, terminated},
+    sequence::terminated,
 };
 
 use crate::{
@@ -14,7 +12,7 @@ use crate::{
         FieldDefinitionExpression, FieldValueExpression,
     },
     condition::ConditionExpression,
-    join::{JoinOperator, JoinRightHand},
+    join::{JoinOperator, JoinRightHand, JoinConstraint},
     table::Table,
 };
 

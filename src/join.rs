@@ -1,4 +1,9 @@
-use crate::{table::Table, select::{SelectStatement, JoinClause}, common::Column, condition::ConditionExpression};
+use crate::{
+    column::Column,
+    condition::ConditionExpression,
+    select::{JoinClause, SelectStatement},
+    table::Table,
+};
 
 pub enum JoinRightHand {
     Table(Table),
