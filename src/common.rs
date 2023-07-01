@@ -13,10 +13,7 @@ use nom::{
 };
 
 use crate::{
-    arithmetic::ArithmeticExpression,
-    column::Column,
-    keywords::sql_keywords,
-    table::Table,
+    arithmetic::ArithmeticExpression, column::Column, keywords::sql_keywords, table::Table,
 };
 use std::{
     fmt,
@@ -51,7 +48,7 @@ pub enum Operator {
     Is,
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize, DisplayTree)]
 pub struct Real {
     pub integral: i32,
     pub fractional: i32,
@@ -72,21 +69,22 @@ pub struct LiteralExpression {
     pub alias: Option<String>,
 }
 
-impl ToString for Literal {
-    fn to_string(&self) -> String {
+impl fmt::Display for Literal {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
-            Literal::Null => "NULL".to_string(),
-            Literal::String(ref s) => format!("'{}'", s.replace('\'', "''")),
-            Literal::Blob(ref bv) => format!(
+            Literal::Null => write!(f, "NULL"),
+            Literal::String(ref s) => write!(f, "'{}'", s),
+            Literal::Blob(ref bv) => write!(
+                f,
                 "{}",
                 bv.iter()
                     .map(|v| format!("{:x}", v))
                     .collect::<Vec<String>>()
                     .join(" ")
             ),
-            Literal::Integer(ref i) => format!("{}", i),
-            Literal::FixedPoint(ref f) => format!("{}.{}", f.integral, f.fractional),
-            Literal::DateTime(ref dt) => format!("{}", dt),
+            Literal::Integer(ref i) => write!(f, "{}", i),
+            Literal::FixedPoint(ref fi) => write!(f, "{}.{}", fi.integral, fi.fractional),
+            Literal::DateTime(ref dt) => write!(f, "{}", dt),
         }
     }
 }
@@ -106,6 +104,12 @@ impl fmt::Display for LiteralExpression {
             Some(ref alias) => write!(f, "{} AS {}", self.value.to_string(), alias),
             None => write!(f, "{}", self.value.to_string()),
         }
+    }
+}
+
+impl fmt::Display for Real {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}.{}", self.integral, self.fractional)
     }
 }
 

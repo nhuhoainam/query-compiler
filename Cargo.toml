@@ -4,7 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+display_tree = "1.1.2"
+display_tree_derive = "1.0.3"
 nom = "7.1.3"
-ptree = "0.4.0"
 serde = "1.0.164"
 serde_derive = "1.0.164"

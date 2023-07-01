@@ -3,7 +3,7 @@ mod tests {
     use crate::{
         arithmetic::{
             arithmetic_expression, Arithmetic, ArithmeticBase, ArithmeticExpression,
-            ArithmeticOperand, ArithmeticOperator,
+            ArithmeticOperator,
         },
         column::Column,
         common::Literal,
@@ -127,148 +127,152 @@ mod tests {
             "bar / 2 / 3",
         ];
         let expected_outputs = [
-            ArithmeticExpression {
-                ari: Arithmetic {
+            ArithmeticExpression::WithoutAlias(Arithmetic::Expr {
+                operator: ArithmeticOperator::Add,
+                left: Box::new(Arithmetic::Expr {
                     operator: ArithmeticOperator::Add,
-                    left: ArithmeticOperand::Expression(Box::new(Arithmetic {
+                    left: Box::new(Arithmetic::Base(ArithmeticBase::Scalar(Literal::Integer(
+                        1,
+                    )))),
+                    right: Box::new(Arithmetic::Base(ArithmeticBase::Scalar(Literal::Integer(
+                        1,
+                    )))),
+                }),
+                right: Box::new(Arithmetic::Base(ArithmeticBase::Scalar(Literal::Integer(
+                    1,
+                )))),
+            }),
+            ArithmeticExpression::WithoutAlias(Arithmetic::Expr {
+                operator: ArithmeticOperator::Multiply,
+                left: Box::new(Arithmetic::Base(ArithmeticBase::Scalar(Literal::Integer(
+                    3,
+                )))),
+                right: Box::new(Arithmetic::Base(ArithmeticBase::Bracketed(Box::new(
+                    Arithmetic::Expr {
                         operator: ArithmeticOperator::Add,
-                        left: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(1))),
-                        right: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(1))),
-                    })),
-                    right: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(1))),
-                },
-                alias: None,
-            },
-            ArithmeticExpression {
-                ari: Arithmetic {
-                    operator: ArithmeticOperator::Multiply,
-                    left: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(3))),
-                    right: ArithmeticOperand::Base(ArithmeticBase::Bracketed(Box::new(
-                        Arithmetic {
-                            operator: ArithmeticOperator::Add,
-                            left: ArithmeticOperand::Base(ArithmeticBase::Scalar(
-                                Literal::Integer(4),
-                            )),
-                            right: ArithmeticOperand::Base(ArithmeticBase::Scalar(
-                                Literal::Integer(5),
-                            )),
-                        },
-                    ))),
-                },
-                alias: None,
-            },
-            ArithmeticExpression {
-                ari: Arithmetic {
-                    operator: ArithmeticOperator::Add,
-                    left: ArithmeticOperand::Expression(Box::new(Arithmetic {
-                        operator: ArithmeticOperator::Subtract,
-                        left: ArithmeticOperand::Base(ArithmeticBase::Column(Column {
-                            name: String::from("foo"),
-                            alias: None,
-                            table: None,
-                            function: None,
-                        })),
-                        right: ArithmeticOperand::Base(ArithmeticBase::Column(Column {
-                            name: String::from("bar"),
-                            alias: None,
-                            table: None,
-                            function: None,
-                        })),
-                    })),
-                    right: ArithmeticOperand::Base(ArithmeticBase::Column(Column {
-                        name: String::from("baz"),
-                        alias: None,
-                        table: None,
-                        function: None,
-                    })),
-                },
-                alias: None,
-            },
-            ArithmeticExpression {
-                ari: Arithmetic {
-                    operator: ArithmeticOperator::Add,
-                    left: ArithmeticOperand::Expression(Box::new(Arithmetic {
-                        operator: ArithmeticOperator::Divide,
-                        left: ArithmeticOperand::Base(ArithmeticBase::Column(Column {
-                            name: String::from("bar"),
-                            alias: None,
-                            table: None,
-                            function: None,
-                        })),
-                        right: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(2))),
-                    })),
-                    right: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(3))),
-                },
-                alias: None,
-            },
-            ArithmeticExpression {
-                ari: Arithmetic {
-                    operator: ArithmeticOperator::Add,
-                    left: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(1))),
-                    right: ArithmeticOperand::Expression(Box::new(Arithmetic {
-                        operator: ArithmeticOperator::Multiply,
-                        left: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(1))),
-                        right: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(2))),
-                    })),
-                },
-                alias: None,
-            },
-            ArithmeticExpression {
-                ari: Arithmetic {
+                        left: Box::new(Arithmetic::Base(ArithmeticBase::Scalar(Literal::Integer(
+                            4,
+                        )))),
+                        right: Box::new(Arithmetic::Base(ArithmeticBase::Scalar(
+                            Literal::Integer(5),
+                        ))),
+                    },
+                )))),
+            }),
+            ArithmeticExpression::WithoutAlias(Arithmetic::Expr {
+                operator: ArithmeticOperator::Add,
+                left: Box::new(Arithmetic::Expr {
                     operator: ArithmeticOperator::Subtract,
-                    left: ArithmeticOperand::Expression(Box::new(Arithmetic {
-                        operator: ArithmeticOperator::Multiply,
-                        left: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(3))),
-                        right: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(4))),
-                    })),
-                    right: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(5))),
-                },
-                alias: None,
-            },
-            ArithmeticExpression {
-                ari: Arithmetic {
-                    operator: ArithmeticOperator::Subtract,
-                    left: ArithmeticOperand::Base(ArithmeticBase::Column(Column {
+                    left: Box::new(Arithmetic::Base(ArithmeticBase::Column(Column {
                         name: String::from("foo"),
                         alias: None,
                         table: None,
                         function: None,
-                    })),
-                    right: ArithmeticOperand::Expression(Box::new(Arithmetic {
-                        operator: ArithmeticOperator::Multiply,
-                        left: ArithmeticOperand::Base(ArithmeticBase::Column(Column {
-                            name: String::from("bar"),
-                            alias: None,
-                            table: None,
-                            function: None,
-                        })),
-                        right: ArithmeticOperand::Base(ArithmeticBase::Column(Column {
-                            name: String::from("baz"),
-                            alias: None,
-                            table: None,
-                            function: None,
-                        })),
-                    })),
-                },
-                alias: None,
-            },
-            ArithmeticExpression {
-                ari: Arithmetic {
+                    }))),
+                    right: Box::new(Arithmetic::Base(ArithmeticBase::Column(Column {
+                        name: String::from("bar"),
+                        alias: None,
+                        table: None,
+                        function: None,
+                    }))),
+                }),
+                right: Box::new(Arithmetic::Base(ArithmeticBase::Column(Column {
+                    name: String::from("baz"),
+                    alias: None,
+                    table: None,
+                    function: None,
+                }))),
+            }),
+            ArithmeticExpression::WithoutAlias(Arithmetic::Expr {
+                operator: ArithmeticOperator::Add,
+                left: Box::new(Arithmetic::Expr {
                     operator: ArithmeticOperator::Divide,
-                    left: ArithmeticOperand::Expression(Box::new(Arithmetic {
-                        operator: ArithmeticOperator::Divide,
-                        left: ArithmeticOperand::Base(ArithmeticBase::Column(Column {
-                            name: String::from("bar"),
-                            alias: None,
-                            table: None,
-                            function: None,
-                        })),
-                        right: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(2))),
-                    })),
-                    right: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(3))),
-                },
-                alias: None,
-            },
+                    left: Box::new(Arithmetic::Base(ArithmeticBase::Column(Column {
+                        name: String::from("bar"),
+                        alias: None,
+                        table: None,
+                        function: None,
+                    }))),
+                    right: Box::new(Arithmetic::Base(ArithmeticBase::Scalar(Literal::Integer(
+                        2,
+                    )))),
+                }),
+                right: Box::new(Arithmetic::Base(ArithmeticBase::Scalar(Literal::Integer(
+                    3,
+                )))),
+            }),
+            ArithmeticExpression::WithoutAlias(Arithmetic::Expr {
+                operator: ArithmeticOperator::Add,
+                left: Box::new(Arithmetic::Base(ArithmeticBase::Scalar(Literal::Integer(
+                    1,
+                )))),
+                right: Box::new(Arithmetic::Expr {
+                    operator: ArithmeticOperator::Multiply,
+                    left: Box::new(Arithmetic::Base(ArithmeticBase::Scalar(Literal::Integer(
+                        1,
+                    )))),
+                    right: Box::new(Arithmetic::Base(ArithmeticBase::Scalar(Literal::Integer(
+                        2,
+                    )))),
+                }),
+            }),
+            ArithmeticExpression::WithoutAlias(Arithmetic::Expr {
+                operator: ArithmeticOperator::Subtract,
+                left: Box::new(Arithmetic::Expr {
+                    operator: ArithmeticOperator::Multiply,
+                    left: Box::new(Arithmetic::Base(ArithmeticBase::Scalar(Literal::Integer(
+                        3,
+                    )))),
+                    right: Box::new(Arithmetic::Base(ArithmeticBase::Scalar(Literal::Integer(
+                        4,
+                    )))),
+                }),
+                right: Box::new(Arithmetic::Base(ArithmeticBase::Scalar(Literal::Integer(
+                    5,
+                )))),
+            }),
+            ArithmeticExpression::WithoutAlias(Arithmetic::Expr {
+                operator: ArithmeticOperator::Subtract,
+                left: Box::new(Arithmetic::Base(ArithmeticBase::Column(Column {
+                    name: String::from("foo"),
+                    alias: None,
+                    table: None,
+                    function: None,
+                }))),
+                right: Box::new(Arithmetic::Expr {
+                    operator: ArithmeticOperator::Multiply,
+                    left: Box::new(Arithmetic::Base(ArithmeticBase::Column(Column {
+                        name: String::from("bar"),
+                        alias: None,
+                        table: None,
+                        function: None,
+                    }))),
+                    right: Box::new(Arithmetic::Base(ArithmeticBase::Column(Column {
+                        name: String::from("baz"),
+                        alias: None,
+                        table: None,
+                        function: None,
+                    }))),
+                }),
+            }),
+            ArithmeticExpression::WithoutAlias(Arithmetic::Expr {
+                operator: ArithmeticOperator::Divide,
+                left: Box::new(Arithmetic::Expr {
+                    operator: ArithmeticOperator::Divide,
+                    left: Box::new(Arithmetic::Base(ArithmeticBase::Column(Column {
+                        name: String::from("bar"),
+                        alias: None,
+                        table: None,
+                        function: None,
+                    }))),
+                    right: Box::new(Arithmetic::Base(ArithmeticBase::Scalar(Literal::Integer(
+                        2,
+                    )))),
+                }),
+                right: Box::new(Arithmetic::Base(ArithmeticBase::Scalar(Literal::Integer(
+                    3,
+                )))),
+            }),
         ];
         for (i, input) in inputs.iter().enumerate() {
             let res = arithmetic_expression(input.as_bytes());
@@ -290,147 +294,175 @@ mod tests {
         ];
 
         let expected_outputs = [
-            ArithmeticExpression {
-                ari: Arithmetic {
+            ArithmeticExpression::WithAlias {
+                ari: Arithmetic::Expr {
                     operator: ArithmeticOperator::Add,
-                    left: ArithmeticOperand::Expression(Box::new(Arithmetic {
+                    left: Box::new(Arithmetic::Expr {
                         operator: ArithmeticOperator::Add,
-                        left: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(1))),
-                        right: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(1))),
-                    })),
-                    right: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(1))),
+                        left: Box::new(Arithmetic::Base(ArithmeticBase::Scalar(Literal::Integer(
+                            1,
+                        )))),
+                        right: Box::new(Arithmetic::Base(ArithmeticBase::Scalar(
+                            Literal::Integer(1),
+                        ))),
+                    }),
+                    right: Box::new(Arithmetic::Base(ArithmeticBase::Scalar(Literal::Integer(
+                        1,
+                    )))),
                 },
-                alias: Some(String::from("foo")),
+                alias: String::from("foo"),
             },
-            ArithmeticExpression {
-                ari: Arithmetic {
+            ArithmeticExpression::WithAlias {
+                ari: Arithmetic::Expr {
                     operator: ArithmeticOperator::Multiply,
-                    left: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(3))),
-                    right: ArithmeticOperand::Base(ArithmeticBase::Bracketed(Box::new(
-                        Arithmetic {
+                    left: Box::new(Arithmetic::Base(ArithmeticBase::Scalar(Literal::Integer(
+                        3,
+                    )))),
+                    right: Box::new(Arithmetic::Base(ArithmeticBase::Bracketed(Box::new(
+                        Arithmetic::Expr {
                             operator: ArithmeticOperator::Add,
-                            left: ArithmeticOperand::Base(ArithmeticBase::Scalar(
+                            left: Box::new(Arithmetic::Base(ArithmeticBase::Scalar(
                                 Literal::Integer(4),
-                            )),
-                            right: ArithmeticOperand::Base(ArithmeticBase::Scalar(
+                            ))),
+                            right: Box::new(Arithmetic::Base(ArithmeticBase::Scalar(
                                 Literal::Integer(5),
-                            )),
+                            ))),
                         },
-                    ))),
+                    )))),
                 },
-                alias: Some(String::from("bar")),
+                alias: String::from("bar"),
             },
-            ArithmeticExpression {
-                ari: Arithmetic {
+            ArithmeticExpression::WithAlias {
+                ari: Arithmetic::Expr {
                     operator: ArithmeticOperator::Add,
-                    left: ArithmeticOperand::Expression(Box::new(Arithmetic {
+                    left: Box::new(Arithmetic::Expr {
                         operator: ArithmeticOperator::Subtract,
-                        left: ArithmeticOperand::Base(ArithmeticBase::Column(Column {
+                        left: Box::new(Arithmetic::Base(ArithmeticBase::Column(Column {
                             name: String::from("foo"),
                             alias: None,
                             table: None,
                             function: None,
-                        })),
-                        right: ArithmeticOperand::Base(ArithmeticBase::Column(Column {
+                        }))),
+                        right: Box::new(Arithmetic::Base(ArithmeticBase::Column(Column {
                             name: String::from("bar"),
                             alias: None,
                             table: None,
                             function: None,
-                        })),
-                    })),
-                    right: ArithmeticOperand::Base(ArithmeticBase::Column(Column {
+                        }))),
+                    }),
+                    right: Box::new(Arithmetic::Base(ArithmeticBase::Column(Column {
                         name: String::from("baz"),
                         alias: None,
                         table: None,
                         function: None,
-                    })),
+                    }))),
                 },
-                alias: Some(String::from("baz")),
+                alias: String::from("baz"),
             },
-            ArithmeticExpression {
-                ari: Arithmetic {
+            ArithmeticExpression::WithAlias {
+                ari: Arithmetic::Expr {
                     operator: ArithmeticOperator::Add,
-                    left: ArithmeticOperand::Expression(Box::new(Arithmetic {
+                    left: Box::new(Arithmetic::Expr {
                         operator: ArithmeticOperator::Divide,
-                        left: ArithmeticOperand::Base(ArithmeticBase::Column(Column {
+                        left: Box::new(Arithmetic::Base(ArithmeticBase::Column(Column {
                             name: String::from("bar"),
                             alias: None,
                             table: None,
                             function: None,
-                        })),
-                        right: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(2))),
-                    })),
-                    right: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(3))),
+                        }))),
+                        right: Box::new(Arithmetic::Base(ArithmeticBase::Scalar(
+                            Literal::Integer(2),
+                        ))),
+                    }),
+                    right: Box::new(Arithmetic::Base(ArithmeticBase::Scalar(Literal::Integer(
+                        3,
+                    )))),
                 },
-                alias: Some(String::from("qux")),
+                alias: String::from("qux"),
             },
-            ArithmeticExpression {
-                ari: Arithmetic {
+            ArithmeticExpression::WithAlias {
+                ari: Arithmetic::Expr {
                     operator: ArithmeticOperator::Add,
-                    left: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(1))),
-                    right: ArithmeticOperand::Expression(Box::new(Arithmetic {
+                    left: Box::new(Arithmetic::Base(ArithmeticBase::Scalar(Literal::Integer(
+                        1,
+                    )))),
+                    right: Box::new(Arithmetic::Expr {
                         operator: ArithmeticOperator::Multiply,
-                        left: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(1))),
-                        right: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(2))),
-                    })),
+                        left: Box::new(Arithmetic::Base(ArithmeticBase::Scalar(Literal::Integer(
+                            1,
+                        )))),
+                        right: Box::new(Arithmetic::Base(ArithmeticBase::Scalar(
+                            Literal::Integer(2),
+                        ))),
+                    }),
                 },
-                alias: Some(String::from("foo")),
+                alias: String::from("foo"),
             },
-            ArithmeticExpression {
-                ari: Arithmetic {
+            ArithmeticExpression::WithAlias {
+                ari: Arithmetic::Expr {
                     operator: ArithmeticOperator::Subtract,
-                    left: ArithmeticOperand::Expression(Box::new(Arithmetic {
+                    left: Box::new(Arithmetic::Expr {
                         operator: ArithmeticOperator::Multiply,
-                        left: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(3))),
-                        right: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(4))),
-                    })),
-                    right: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(5))),
+                        left: Box::new(Arithmetic::Base(ArithmeticBase::Scalar(Literal::Integer(
+                            3,
+                        )))),
+                        right: Box::new(Arithmetic::Base(ArithmeticBase::Scalar(
+                            Literal::Integer(4),
+                        ))),
+                    }),
+                    right: Box::new(Arithmetic::Base(ArithmeticBase::Scalar(Literal::Integer(
+                        5,
+                    )))),
                 },
-                alias: Some(String::from("bar")),
+                alias: String::from("bar"),
             },
-            ArithmeticExpression {
-                ari: Arithmetic {
+            ArithmeticExpression::WithAlias {
+                ari: Arithmetic::Expr {
                     operator: ArithmeticOperator::Subtract,
-                    left: ArithmeticOperand::Base(ArithmeticBase::Column(Column {
+                    left: Box::new(Arithmetic::Base(ArithmeticBase::Column(Column {
                         name: String::from("foo"),
                         alias: None,
                         table: None,
                         function: None,
-                    })),
-                    right: ArithmeticOperand::Expression(Box::new(Arithmetic {
+                    }))),
+                    right: Box::new(Arithmetic::Expr {
                         operator: ArithmeticOperator::Multiply,
-                        left: ArithmeticOperand::Base(ArithmeticBase::Column(Column {
+                        left: Box::new(Arithmetic::Base(ArithmeticBase::Column(Column {
                             name: String::from("bar"),
                             alias: None,
                             table: None,
                             function: None,
-                        })),
-                        right: ArithmeticOperand::Base(ArithmeticBase::Column(Column {
+                        }))),
+                        right: Box::new(Arithmetic::Base(ArithmeticBase::Column(Column {
                             name: String::from("baz"),
                             alias: None,
                             table: None,
                             function: None,
-                        })),
-                    })),
+                        }))),
+                    }),
                 },
-                alias: Some(String::from("baz")),
+                alias: String::from("baz"),
             },
-            ArithmeticExpression {
-                ari: Arithmetic {
+            ArithmeticExpression::WithAlias {
+                ari: Arithmetic::Expr {
                     operator: ArithmeticOperator::Divide,
-                    left: ArithmeticOperand::Expression(Box::new(Arithmetic {
+                    left: Box::new(Arithmetic::Expr {
                         operator: ArithmeticOperator::Divide,
-                        left: ArithmeticOperand::Base(ArithmeticBase::Column(Column {
+                        left: Box::new(Arithmetic::Base(ArithmeticBase::Column(Column {
                             name: String::from("bar"),
                             alias: None,
                             table: None,
                             function: None,
-                        })),
-                        right: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(2))),
-                    })),
-                    right: ArithmeticOperand::Base(ArithmeticBase::Scalar(Literal::Integer(3))),
+                        }))),
+                        right: Box::new(Arithmetic::Base(ArithmeticBase::Scalar(
+                            Literal::Integer(2),
+                        ))),
+                    }),
+                    right: Box::new(Arithmetic::Base(ArithmeticBase::Scalar(Literal::Integer(
+                        3,
+                    )))),
                 },
-                alias: Some(String::from("qux")),
+                alias: String::from("qux"),
             },
         ];
         for (i, input) in inputs.iter().enumerate() {
