@@ -11,7 +11,7 @@ pub enum FunctionExpression {
     Max(Column),
     Min(Column),
     GroupConcat(Column, String),
-    Generic(String, Columns),
+    Generic(String, FunctionArguments),
 }
 
 impl fmt::Display for FunctionExpression {
@@ -36,11 +36,11 @@ impl fmt::Display for FunctionExpression {
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
-pub struct Columns {
+pub struct FunctionArguments {
     pub arguments: Vec<Column>,
 }
 
-impl fmt::Display for Columns {
+impl fmt::Display for FunctionArguments {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
@@ -55,9 +55,9 @@ impl fmt::Display for Columns {
     }
 }
 
-impl<'a> From<Vec<Column>> for Columns {
-    fn from(args: Vec<Column>) -> Columns {
-        Columns { arguments: args }
+impl<'a> From<Vec<Column>> for FunctionArguments {
+    fn from(args: Vec<Column>) -> FunctionArguments {
+        FunctionArguments { arguments: args }
     }
 }
 

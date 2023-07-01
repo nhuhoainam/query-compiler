@@ -14,4 +14,5 @@ mod condition;
 mod join;
 mod keywords;
 mod table;
+mod tests;
 mod select;
