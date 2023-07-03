@@ -7,7 +7,7 @@ use nom::{
     },
     combinator::{map, not, opt, peek},
     error::{ErrorKind, ParseError},
-    multi::fold_many0,
+    multi::{fold_many0, many0},
     sequence::{delimited, pair, preceded, terminated, tuple},
     IResult, InputLength, Parser,
 };
@@ -391,4 +391,8 @@ pub fn literal_expression(i: &[u8]) -> IResult<&[u8], LiteralExpression> {
             alias: (p.1).map(|a| a.to_string()),
         },
     )(i)
+}
+
+pub fn value_list(i: &[u8]) -> IResult<&[u8], Vec<Literal>> {
+    many0(delimited(multispace0, literal, opt(ws_sep_comma)))(i)
 }
