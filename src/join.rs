@@ -5,6 +5,7 @@ use crate::{
     table::Table,
 };
 
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub enum JoinRightHand {
     Table(Table),
     // A comma-separated (and implicitly joined) sequence of tables.
@@ -14,6 +15,7 @@ pub enum JoinRightHand {
     NestedJoin(Box<JoinClause>),
 }
 
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub enum JoinOperator {
     Inner,
     LeftOuter,
@@ -23,6 +25,7 @@ pub enum JoinOperator {
     Natural,
 }
 
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub enum JoinConstraint {
     On(ConditionExpression),
     Using(Vec<Column>),

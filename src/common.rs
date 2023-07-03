@@ -20,6 +20,7 @@ use std::{
     str::{self, FromStr},
 };
 
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub enum FieldDefinitionExpression {
     All,
     AllFromTable(Table),
@@ -27,11 +28,13 @@ pub enum FieldDefinitionExpression {
     FieldValue(FieldValueExpression),
 }
 
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub enum FieldValueExpression {
     Arithmetic(ArithmeticExpression),
     Literal(LiteralExpression),
 }
 
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub enum Operator {
     And,
     Or,
@@ -64,6 +67,7 @@ pub enum Literal {
     DateTime(String),
 }
 
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub struct LiteralExpression {
     pub value: Literal,
     pub alias: Option<String>,
