@@ -2,15 +2,17 @@ use std::fmt;
 
 use crate::keywords::escape_if_keyword;
 
+type FunctionArgument = Column;
+
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub enum FunctionExpression {
-    Avg(Column, bool),
-    Count(Column, bool),
+    Avg(FunctionArgument, bool),
+    Count(FunctionArgument, bool),
     CountStar,
-    Sum(Column, bool),
-    Max(Column),
-    Min(Column),
-    GroupConcat(Column, String),
+    Sum(FunctionArgument, bool),
+    Max(FunctionArgument),
+    Min(FunctionArgument),
+    GroupConcat(FunctionArgument, String),
     Generic(String, FunctionArguments),
 }
 
@@ -37,7 +39,7 @@ impl fmt::Display for FunctionExpression {
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub struct FunctionArguments {
-    pub arguments: Vec<Column>,
+    pub arguments: Vec<FunctionArgument>,
 }
 
 impl fmt::Display for FunctionArguments {
@@ -55,8 +57,8 @@ impl fmt::Display for FunctionArguments {
     }
 }
 
-impl<'a> From<Vec<Column>> for FunctionArguments {
-    fn from(args: Vec<Column>) -> FunctionArguments {
+impl<'a> From<Vec<FunctionArgument>> for FunctionArguments {
+    fn from(args: Vec<FunctionArgument>) -> FunctionArguments {
         FunctionArguments { arguments: args }
     }
 }
@@ -106,5 +108,55 @@ impl<'a> From<&'a str> for Column {
                 function: None,
             },
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn column_from_str() {
+        let s = "table.col";
+        let c = Column::from(s);
+
+        assert_eq!(
+            c,
+            Column {
+                name: String::from("col"),
+                alias: None,
+                table: Some(String::from("table")),
+                function: None,
+            }
+        );
+    }
+
+    #[test]
+    fn print_function_column() {
+        let c1 = Column {
+            name: "".into(), // must be present, but will be ignored
+            alias: Some("foo".into()),
+            table: None,
+            function: Some(Box::new(FunctionExpression::CountStar)),
+        };
+        let c2 = Column {
+            name: "".into(), // must be present, but will be ignored
+            alias: None,
+            table: None,
+            function: Some(Box::new(FunctionExpression::CountStar)),
+        };
+        let c3 = Column {
+            name: "".into(), // must be present, but will be ignored
+            alias: None,
+            table: None,
+            function: Some(Box::new(FunctionExpression::Sum(
+                Column::from("mytab.foo"),
+                false,
+            ))),
+        };
+
+        assert_eq!(format!("{}", c1), "count(*) AS foo");
+        assert_eq!(format!("{}", c2), "count(*)");
+        assert_eq!(format!("{}", c3), "sum(mytab.foo)");
     }
 }
