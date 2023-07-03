@@ -2,20 +2,20 @@ use std::fmt;
 
 use nom::{
     branch::alt,
-    bytes::complete::tag,
+    bytes::complete::{tag, tag_no_case},
     combinator::{map, opt},
     multi::many0,
-    sequence::terminated,
+    sequence::{terminated, tuple}, IResult, character::complete::{multispace0, multispace1},
 };
 
 use crate::{
     column::Column,
     common::{
         column_identifier, literal_expression, table_reference, ws_sep_comma,
-        FieldDefinitionExpression, FieldValueExpression,
+        FieldDefinitionExpression, FieldValueExpression, field_list,
     },
-    condition::ConditionExpression,
-    join::{JoinConstraint, JoinOperator, JoinRightHand},
+    condition::{ConditionExpression, condition_expr},
+    join::JoinClause,
     table::Table, order::OrderByClause,
 };
 
@@ -24,13 +24,6 @@ pub enum FromItem {
     Table(Table),
     NestedSelect(SelectStatement),
     Join(JoinClause),
-}
-
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
-pub struct JoinClause {
-    pub operator: JoinOperator,
-    pub right: JoinRightHand,
-    pub condition: JoinConstraint,
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
@@ -56,6 +49,30 @@ impl fmt::Display for SelectStatement {
     }
 }
 
+fn having_clause(i: &[u8]) -> IResult<&[u8], ConditionExpression> {
+    let (remaining_input, (_, _, _, ce)) = tuple((
+        multispace0,
+        tag_no_case("having"),
+        multispace1,
+        condition_expr,
+    ))(i)?;
+
+    Ok((remaining_input, ce))
+}
+
+/// Parse GROUP BY clause
+pub fn group_by_clause(i: &[u8]) -> IResult<&[u8], GroupByClause> {
+    let (remaining_input, (_, _, _, columns, having)) = tuple((
+        multispace0,
+        tag_no_case("group by"),
+        multispace1,
+        field_list,
+        opt(having_clause),
+    ))(i)?;
+
+    Ok((remaining_input, GroupByClause { columns, having }))
+}
+
 pub fn field_definition_expression(
     i: &[u8],
 ) -> nom::IResult<&[u8], Vec<FieldDefinitionExpression>> {
@@ -74,6 +91,18 @@ pub fn field_definition_expression(
         )),
         opt(ws_sep_comma),
     ))(i)
+}
+
+/// Parse WHERE clause of a selection
+pub fn where_clause(i: &[u8]) -> IResult<&[u8], ConditionExpression> {
+    let (remaining_input, (_, _, _, where_condition)) = tuple((
+        multispace0,
+        tag_no_case("where"),
+        multispace1,
+        condition_expr,
+    ))(i)?;
+
+    Ok((remaining_input, where_condition))
 }
 
 pub fn select_statement(i: &[u8]) -> nom::IResult<&[u8], SelectStatement> {

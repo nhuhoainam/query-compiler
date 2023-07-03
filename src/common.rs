@@ -396,3 +396,12 @@ pub fn literal_expression(i: &[u8]) -> IResult<&[u8], LiteralExpression> {
 pub fn value_list(i: &[u8]) -> IResult<&[u8], Vec<Literal>> {
     many0(delimited(multispace0, literal, opt(ws_sep_comma)))(i)
 }
+
+// Parse rule for a comma-separated list of fields without aliases.
+pub fn field_list(i: &[u8]) -> IResult<&[u8], Vec<Column>> {
+    many0(terminated(column_identifier_no_alias, opt(ws_sep_comma)))(i)
+}
+
+pub fn table_list(i: &[u8]) -> IResult<&[u8], Vec<Table>> {
+    many0(terminated(table_reference, opt(ws_sep_comma)))(i)
+}
