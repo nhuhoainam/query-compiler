@@ -1,6 +1,6 @@
 use std::fmt::{self, Formatter};
 
-use display_tree::{AsTree, DisplayTree, StyleBuilder};
+use display_tree::DisplayTree;
 use nom::{
     branch::alt,
     bytes::complete::tag,
