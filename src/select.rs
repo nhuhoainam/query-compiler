@@ -2,7 +2,7 @@ use std::fmt;
 
 use nom::{
     branch::alt,
-    bytes::complete::{tag, tag_no_case},
+    bytes::complete::tag,
     combinator::{map, opt},
     multi::many0,
     sequence::terminated,
@@ -16,7 +16,7 @@ use crate::{
     },
     condition::ConditionExpression,
     join::{JoinConstraint, JoinOperator, JoinRightHand},
-    table::Table,
+    table::Table, order::OrderByClause,
 };
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
@@ -39,25 +39,6 @@ pub struct GroupByClause {
     pub having: Option<ConditionExpression>,
 }
 
-// pub enum OrderType {
-//     Ascending,
-//     Descending,
-// }
-
-// impl fmt::Display for OrderType {
-//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-//         match self {
-//             OrderType::Ascending => write!(f, "ASC"),
-//             OrderType::Descending => write!(f, "DESC"),
-//         }
-//     }
-// }
-
-// pub struct OrderByClause {
-//     pub columns: Vec<Column>,
-//     pub order_type: OrderType,
-// }
-
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub struct SelectStatement {
     distinct: bool,
@@ -66,7 +47,7 @@ pub struct SelectStatement {
     join: Vec<JoinClause>,
     condition: Option<ConditionExpression>,
     group_by: Option<GroupByClause>,
-    // order_by: Option<OrderByClause>,
+    order_by: Option<OrderByClause>,
 }
 
 impl fmt::Display for SelectStatement {
@@ -74,13 +55,6 @@ impl fmt::Display for SelectStatement {
         todo!()
     }
 }
-
-// pub fn order_type(i: &[u8]) -> nom::IResult<&[u8], OrderType> {
-//     alt((
-//         map(tag_no_case("asc"), |_| OrderType::Ascending),
-//         map(tag_no_case("desc"), |_| OrderType::Descending),
-//     ))(i)
-// }
 
 pub fn field_definition_expression(
     i: &[u8],

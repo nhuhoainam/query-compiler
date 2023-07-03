@@ -15,6 +15,7 @@ pub mod common;
 pub mod condition;
 pub mod join;
 pub mod keywords;
+pub mod order;
 pub mod table;
 pub mod tests;
 pub mod select;
