@@ -16,24 +16,21 @@ use crate::{
     common::{as_alias, column_identifier_no_alias, integer_literal, Literal},
 };
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize, DisplayTree)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub enum Arithmetic {
-    Base(#[tree] ArithmeticBase),
+    Base(ArithmeticBase),
     Expr {
-        #[node_label]
         operator: ArithmeticOperator,
-        #[tree]
         left: Box<Self>,
-        #[tree]
         right: Box<Self>,
     },
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize, DisplayTree)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub enum ArithmeticBase {
-    Column(#[node_label] Column),
-    Scalar(#[node_label] Literal),
-    Bracketed(#[tree] Box<Arithmetic>),
+    Column(Column),
+    Scalar(Literal),
+    Bracketed(Box<Arithmetic>),
 }
 
 // #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize, DisplayTree)]
@@ -53,12 +50,11 @@ pub enum ArithmeticOperator {
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize, DisplayTree)]
 pub enum ArithmeticExpression {
     WithAlias {
-        #[tree]
         ari: Arithmetic,
         #[node_label]
         alias: String,
     },
-    WithoutAlias(#[tree] Arithmetic),
+    WithoutAlias(Arithmetic),
 }
 
 impl ArithmeticExpression {
@@ -103,7 +99,8 @@ impl fmt::Display for ArithmeticBase {
             ArithmeticBase::Column(ref col) => write!(f, "{}", col),
             ArithmeticBase::Scalar(ref lit) => write!(f, "{}", lit.to_string()),
             ArithmeticBase::Bracketed(ref ari) => {
-                write!(f, "{}", AsTree::new(&**ari).indentation(1))
+                // write!(f, "{}", AsTree::new(&**ari).indentation(1))
+                write!(f, "({})", ari)
             }
         }
     }
