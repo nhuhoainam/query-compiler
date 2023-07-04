@@ -1,3 +1,4 @@
+use display_tree::DisplayTree;
 use nom::{
     branch::alt,
     bytes::complete::{is_not, tag, tag_no_case, take, take_while1},
@@ -20,18 +21,18 @@ use std::{
     str::{self, FromStr},
 };
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize, DisplayTree)]
 pub enum FieldDefinitionExpression {
     All,
-    AllFromTable(Table),
+    AllFromTable(#[node_label] Table),
     Column(Column),
-    FieldValue(FieldValueExpression),
+    FieldValue(#[tree] FieldValueExpression),
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize, DisplayTree)]
 pub enum FieldValueExpression {
-    Arithmetic(ArithmeticExpression),
-    Literal(LiteralExpression),
+    Arithmetic(#[tree] ArithmeticExpression),
+    Literal(#[tree] LiteralExpression),
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
@@ -106,6 +107,26 @@ impl fmt::Display for LiteralExpression {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.alias {
             Some(ref alias) => write!(f, "{} AS {}", self.value.to_string(), alias),
+            None => write!(f, "{}", self.value.to_string()),
+        }
+    }
+}
+
+impl DisplayTree for LiteralExpression {
+    fn fmt(&self, f: &mut fmt::Formatter, style: display_tree::Style) -> fmt::Result {
+        match self.alias {
+            Some(ref alias) => {
+                writeln!(f, "{}", alias)?;
+                write!(
+                    f,
+                    "{}{} {}",
+                    style.char_set.end_connector,
+                    std::iter::repeat(style.char_set.horizontal)
+                        .take(style.indentation as usize)
+                        .collect::<String>(),
+                    self.value
+                )
+            }
             None => write!(f, "{}", self.value.to_string()),
         }
     }

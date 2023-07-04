@@ -47,14 +47,10 @@ pub enum ArithmeticOperator {
     Divide,
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize, DisplayTree)]
-pub enum ArithmeticExpression {
-    WithAlias {
-        ari: Arithmetic,
-        #[node_label]
-        alias: String,
-    },
-    WithoutAlias(Arithmetic),
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+pub struct ArithmeticExpression {
+    pub ari: Arithmetic,
+    pub alias: Option<String>,
 }
 
 impl ArithmeticExpression {
@@ -64,20 +60,13 @@ impl ArithmeticExpression {
         operator: ArithmeticOperator,
         alias: Option<String>,
     ) -> Self {
-        match alias {
-            Some(a) => ArithmeticExpression::WithAlias {
-                ari: Arithmetic::Expr {
-                    operator,
-                    left: Box::new(Arithmetic::Base(left)),
-                    right: Box::new(Arithmetic::Base(right)),
-                },
-                alias: a,
-            },
-            None => ArithmeticExpression::WithoutAlias(Arithmetic::Expr {
+        ArithmeticExpression {
+            ari: Arithmetic::Expr {
                 operator,
                 left: Box::new(Arithmetic::Base(left)),
                 right: Box::new(Arithmetic::Base(right)),
-            }),
+            },
+            alias,
         }
     }
 }
@@ -128,46 +117,31 @@ impl fmt::Display for Arithmetic {
     }
 }
 
-// impl DisplayTree for Arithmetic {
-//     fn fmt(&self, f: &mut Formatter<'_>, style: Style) -> fmt::Result {
-//         match self {
-//             Arithmetic::Base(base) => write!(f, "{}", base),
-//             Arithmetic::Expr {
-//                 ref operator,
-//                 ref left,
-//                 ref right,
-//             } => {
-//                 writeln!(f, "{}", operator)?;
-//                 writeln!(
-//                     f,
-//                     "{}{} {}",
-//                     style.char_set.connector,
-//                     std::iter::repeat(style.char_set.horizontal)
-//                         .take(style.indentation as usize)
-//                         .collect::<String>(),
-//                     left
-//                 )?;
-//                 write!(
-//                     f,
-//                     "{}{} {}",
-//                     style.char_set.end_connector,
-//                     std::iter::repeat(style.char_set.horizontal)
-//                         .take(style.indentation as usize)
-//                         .collect::<String>(),
-//                     right
-//                 )
-//             }
-//         }
-//     }
-// }
-
 impl fmt::Display for ArithmeticExpression {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            ArithmeticExpression::WithAlias { ari, alias } => {
-                write!(f, "{} AS {}", ari, alias)
+        match self.alias {
+            Some(ref alias) => write!(f, "{} AS {}", self.ari, alias),
+            None => write!(f, "{}", self.ari),
+        }
+    }
+}
+
+impl DisplayTree for ArithmeticExpression {
+    fn fmt(&self, f: &mut fmt::Formatter, style: display_tree::Style) -> fmt::Result {
+        match self.alias {
+            Some(ref alias) => {
+                writeln!(f, "{}", alias)?;
+                write!(
+                    f,
+                    "{}{} {}",
+                    style.char_set.end_connector,
+                    std::iter::repeat(style.char_set.horizontal)
+                        .take(style.indentation as usize)
+                        .collect::<String>(),
+                    self.ari
+                )
             }
-            ArithmeticExpression::WithoutAlias(ari) => write!(f, "{}", ari),
+            None => write!(f, "{}", self.ari),
         }
     }
 }
@@ -272,11 +246,11 @@ pub fn arithmetic_expression(i: &[u8]) -> IResult<&[u8], ArithmeticExpression> {
     map(
         pair(arithmetic, opt(as_alias)),
         |(ari, opt_alias)| match opt_alias {
-            Some(alias) => ArithmeticExpression::WithAlias {
+            Some(alias) => ArithmeticExpression {
                 ari,
-                alias: alias.to_string(),
+                alias: Some(alias.to_string()),
             },
-            None => ArithmeticExpression::WithoutAlias(ari),
+            None => ArithmeticExpression { ari, alias: None },
         },
     )(i)
 }
