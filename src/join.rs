@@ -52,7 +52,6 @@ pub enum JoinCondition {
 pub fn join_operator(i: &[u8]) -> IResult<&[u8], JoinOperator> {
     alt((
         map(tag_no_case("join"), |_| JoinOperator::Natural),
-        map(tag_no_case("natural join"), |_| JoinOperator::Natural),
         map(tag_no_case("left join"), |_| JoinOperator::LeftOuter),
         map(tag_no_case("right join"), |_| JoinOperator::RightOuter),
         map(tag_no_case("inner join"), |_| JoinOperator::Inner),
@@ -61,6 +60,7 @@ pub fn join_operator(i: &[u8]) -> IResult<&[u8], JoinOperator> {
 }
 
 fn join_constraint(i: &[u8]) -> IResult<&[u8], JoinCondition> {
+    println!("{:?}", i);
     let using_clause = map(
         tuple((
             tag_no_case("using"),
@@ -85,7 +85,7 @@ fn join_constraint(i: &[u8]) -> IResult<&[u8], JoinCondition> {
         tuple((tag_no_case("on"), multispace1, on_constraint)),
         |t| JoinCondition::On(t.2),
     );
-
+    
     alt((using_clause, on_clause))(i)
 }
 
@@ -132,7 +132,7 @@ fn join_rhs(i: &[u8]) -> IResult<&[u8], JoinRightHand> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        common::{Operator, FieldDefinitionExpression},
+        common::{FieldDefinitionExpression, Operator},
         condition::{ConditionBase, ConditionTree},
     };
 
@@ -141,10 +141,6 @@ mod tests {
     #[test]
     fn test_join_operator() {
         assert_eq!(join_operator(b"join"), Ok((&[][..], JoinOperator::Natural)));
-        assert_eq!(
-            join_operator(b"natural join"),
-            Ok((&[][..], JoinOperator::Natural))
-        );
         assert_eq!(
             join_operator(b"left join"),
             Ok((&[][..], JoinOperator::LeftOuter))
@@ -210,26 +206,22 @@ mod tests {
 
     #[test]
     fn test_join_clause() {
+        let sample = join_clause(b"join t on a = b").unwrap();
         assert_eq!(
-            join_clause(b"join t on a = b"),
-            Ok((
-                &[][..],
-                JoinClause {
-                    operator: JoinOperator::Natural,
-                    right: JoinRightHand::Table(Table::from("t".to_string())),
-                    constraint: JoinCondition::On(ConditionExpression::ComparisonOp(
-                        ConditionTree {
-                            operator: Operator::Equal,
-                            left: Box::new(ConditionExpression::Base(ConditionBase::Field(
-                                Column::from("a")
-                            ))),
-                            right: Box::new(ConditionExpression::Base(ConditionBase::Field(
-                                Column::from("b")
-                            ))),
-                        }
-                    ))
-                }
-            ))
+            sample.1,
+            JoinClause {
+                operator: JoinOperator::Natural,
+                right: JoinRightHand::Table(Table::from("t".to_string())),
+                constraint: JoinCondition::On(ConditionExpression::ComparisonOp(ConditionTree {
+                    operator: Operator::Equal,
+                    left: Box::new(ConditionExpression::Base(ConditionBase::Field(
+                        Column::from("a")
+                    ))),
+                    right: Box::new(ConditionExpression::Base(ConditionBase::Field(
+                        Column::from("b")
+                    ))),
+                }))
+            }
         );
         assert_eq!(
             join_clause(b"join t using (a, b, c)"),

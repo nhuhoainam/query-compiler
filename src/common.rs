@@ -197,7 +197,7 @@ pub fn as_alias(i: &[u8]) -> IResult<&[u8], &str> {
     map(
         tuple((
             multispace1,
-            opt(pair(tag_no_case("as"), multispace1)),
+            pair(tag_no_case("as"), multispace1),
             sql_identifier,
         )),
         |a| str::from_utf8(a.2).unwrap(),
