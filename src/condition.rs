@@ -28,9 +28,9 @@ pub enum ConditionBase {
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub struct ConditionTree {
-    operator: Operator,
-    left: Box<ConditionExpression>,
-    right: Box<ConditionExpression>,
+    pub operator: Operator,
+    pub left: Box<ConditionExpression>,
+    pub right: Box<ConditionExpression>,
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
@@ -205,7 +205,7 @@ fn boolean_primary(i: &[u8]) -> IResult<&[u8], ConditionExpression> {
     ))(i)
 }
 
-// Parse a conditional expression into a condition tree structure
+/// Parse a conditional expression into a condition tree structure
 pub fn condition_expr(i: &[u8]) -> IResult<&[u8], ConditionExpression> {
     let cond = map(
         separated_pair(
@@ -292,4 +292,261 @@ pub fn parenthesized_expr(i: &[u8]) -> IResult<&[u8], ConditionExpression> {
         ),
         not_expr,
     ))(i)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_condition_expr() {
+        let a_cond = ConditionExpression::ComparisonOp(ConditionTree {
+            operator: Operator::Equal,
+            left: Box::new(ConditionExpression::Base(ConditionBase::Field(
+                Column::from("a"),
+            ))),
+            right: Box::new(ConditionExpression::Base(ConditionBase::Literal(
+                Literal::Integer(1),
+            ))),
+        });
+        let b_cond = ConditionExpression::ComparisonOp(ConditionTree {
+            operator: Operator::Equal,
+            left: Box::new(ConditionExpression::Base(ConditionBase::Field(
+                Column::from("b"),
+            ))),
+            right: Box::new(ConditionExpression::Base(ConditionBase::Literal(
+                Literal::Integer(2),
+            ))),
+        });
+        let c_cond = ConditionExpression::ComparisonOp(ConditionTree {
+            operator: Operator::Equal,
+            left: Box::new(ConditionExpression::Base(ConditionBase::Field(
+                Column::from("c"),
+            ))),
+            right: Box::new(ConditionExpression::Base(ConditionBase::Literal(
+                Literal::Integer(3),
+            ))),
+        });
+        let d_cond = ConditionExpression::ComparisonOp(ConditionTree {
+            operator: Operator::Equal,
+            left: Box::new(ConditionExpression::Base(ConditionBase::Field(
+                Column::from("d"),
+            ))),
+            right: Box::new(ConditionExpression::Base(ConditionBase::Literal(
+                Literal::Integer(4),
+            ))),
+        });
+
+        assert_eq!(condition_expr(b"a = 1"), Ok((&b""[..], a_cond.clone())));
+        assert_eq!(
+            condition_expr(b"a = 1 and b = 2"),
+            Ok((
+                &b""[..],
+                ConditionExpression::LogicalOp(ConditionTree {
+                    operator: Operator::And,
+                    left: Box::new(a_cond.clone()),
+                    right: Box::new(b_cond.clone()),
+                })
+            ))
+        );
+        assert_eq!(
+            condition_expr(b"a = 1 or b = 2"),
+            Ok((
+                &b""[..],
+                ConditionExpression::LogicalOp(ConditionTree {
+                    operator: Operator::Or,
+                    left: Box::new(a_cond.clone()),
+                    right: Box::new(b_cond.clone()),
+                })
+            ))
+        );
+        assert_eq!(
+            condition_expr(b"(a = 1) or b = 2"),
+            Ok((
+                &b""[..],
+                ConditionExpression::LogicalOp(ConditionTree {
+                    operator: Operator::Or,
+                    left: Box::new(ConditionExpression::Bracketed(Box::new(a_cond.clone()))),
+                    right: Box::new(b_cond.clone()),
+                })
+            ))
+        );
+        assert_eq!(
+            condition_expr(b"a = 1 or (b = 2)"),
+            Ok((
+                &b""[..],
+                ConditionExpression::LogicalOp(ConditionTree {
+                    operator: Operator::Or,
+                    left: Box::new(a_cond.clone()),
+                    right: Box::new(ConditionExpression::Bracketed(Box::new(b_cond.clone()))),
+                })
+            ))
+        );
+        assert_eq!(
+            condition_expr(b"(a = 1) or (b = 2)"),
+            Ok((
+                &b""[..],
+                ConditionExpression::LogicalOp(ConditionTree {
+                    operator: Operator::Or,
+                    left: Box::new(ConditionExpression::Bracketed(Box::new(a_cond.clone()))),
+                    right: Box::new(ConditionExpression::Bracketed(Box::new(b_cond.clone()))),
+                })
+            ))
+        );
+        assert_eq!(
+            condition_expr(b"(a = 1 or b = 2)"),
+            Ok((
+                &b""[..],
+                ConditionExpression::Bracketed(Box::new(ConditionExpression::LogicalOp(
+                    ConditionTree {
+                        operator: Operator::Or,
+                        left: Box::new(a_cond.clone()),
+                        right: Box::new(b_cond.clone()),
+                    }
+                )))
+            ))
+        );
+        assert_eq!(
+            condition_expr(b"((a = 1) or (b = 2))"),
+            Ok((
+                &b""[..],
+                ConditionExpression::Bracketed(Box::new(ConditionExpression::LogicalOp(
+                    ConditionTree {
+                        operator: Operator::Or,
+                        left: Box::new(ConditionExpression::Bracketed(Box::new(a_cond.clone()))),
+                        right: Box::new(ConditionExpression::Bracketed(Box::new(b_cond.clone()))),
+                    }
+                )))
+            ))
+        );
+        assert_eq!(
+            condition_expr(b"((a = 1) or (b = 2)) and c = 3"),
+            Ok((
+                &b""[..],
+                ConditionExpression::LogicalOp(ConditionTree {
+                    operator: Operator::And,
+                    left: Box::new(ConditionExpression::Bracketed(Box::new(
+                        ConditionExpression::LogicalOp(ConditionTree {
+                            operator: Operator::Or,
+                            left: Box::new(ConditionExpression::Bracketed(Box::new(
+                                a_cond.clone()
+                            ))),
+                            right: Box::new(ConditionExpression::Bracketed(Box::new(
+                                b_cond.clone()
+                            ))),
+                        })
+                    ))),
+                    right: Box::new(c_cond.clone()),
+                })
+            ))
+        );
+        assert_eq!(
+            condition_expr(b"((a = 1) or (b = 2)) and (c = 3)"),
+            Ok((
+                &b""[..],
+                ConditionExpression::LogicalOp(ConditionTree {
+                    operator: Operator::And,
+                    left: Box::new(ConditionExpression::Bracketed(Box::new(
+                        ConditionExpression::LogicalOp(ConditionTree {
+                            operator: Operator::Or,
+                            left: Box::new(ConditionExpression::Bracketed(Box::new(
+                                a_cond.clone()
+                            ))),
+                            right: Box::new(ConditionExpression::Bracketed(Box::new(
+                                b_cond.clone()
+                            ))),
+                        })
+                    ))),
+                    right: Box::new(ConditionExpression::Bracketed(Box::new(c_cond.clone()))),
+                })
+            ))
+        );
+        assert_eq!(
+            condition_expr(b"((a = 1) or (b = 2)) and (c = 3 or d = 4)"),
+            Ok((
+                &b""[..],
+                ConditionExpression::LogicalOp(ConditionTree {
+                    operator: Operator::And,
+                    left: Box::new(ConditionExpression::Bracketed(Box::new(
+                        ConditionExpression::LogicalOp(ConditionTree {
+                            operator: Operator::Or,
+                            left: Box::new(ConditionExpression::Bracketed(Box::new(
+                                a_cond.clone()
+                            ))),
+                            right: Box::new(ConditionExpression::Bracketed(Box::new(
+                                b_cond.clone()
+                            ))),
+                        })
+                    ))),
+                    right: Box::new(ConditionExpression::Bracketed(Box::new(
+                        ConditionExpression::LogicalOp(ConditionTree {
+                            operator: Operator::Or,
+                            left: Box::new(c_cond.clone()),
+                            right: Box::new(d_cond.clone()),
+                        })
+                    ))),
+                })
+            ))
+        );
+        assert_eq!(
+            condition_expr(b"((a = 1) or (b = 2)) and (c = 3 or (d = 4))"),
+            Ok((
+                &b""[..],
+                ConditionExpression::LogicalOp(ConditionTree {
+                    operator: Operator::And,
+                    left: Box::new(ConditionExpression::Bracketed(Box::new(
+                        ConditionExpression::LogicalOp(ConditionTree {
+                            operator: Operator::Or,
+                            left: Box::new(ConditionExpression::Bracketed(Box::new(
+                                a_cond.clone()
+                            ))),
+                            right: Box::new(ConditionExpression::Bracketed(Box::new(
+                                b_cond.clone()
+                            ))),
+                        })
+                    ))),
+                    right: Box::new(ConditionExpression::Bracketed(Box::new(
+                        ConditionExpression::LogicalOp(ConditionTree {
+                            operator: Operator::Or,
+                            left: Box::new(c_cond.clone()),
+                            right: Box::new(ConditionExpression::Bracketed(Box::new(
+                                d_cond.clone()
+                            ))),
+                        })
+                    ))),
+                })
+            ))
+        );
+        assert_eq!(
+            condition_expr(b"((a = 1) or (b = 2)) and ((c = 3) or (d = 4))"),
+            Ok((
+                &b""[..],
+                ConditionExpression::LogicalOp(ConditionTree {
+                    operator: Operator::And,
+                    left: Box::new(ConditionExpression::Bracketed(Box::new(
+                        ConditionExpression::LogicalOp(ConditionTree {
+                            operator: Operator::Or,
+                            left: Box::new(ConditionExpression::Bracketed(Box::new(
+                                a_cond.clone()
+                            ))),
+                            right: Box::new(ConditionExpression::Bracketed(Box::new(
+                                b_cond.clone()
+                            ))),
+                        })
+                    ))),
+                    right: Box::new(ConditionExpression::Bracketed(Box::new(
+                        ConditionExpression::LogicalOp(ConditionTree {
+                            operator: Operator::Or,
+                            left: Box::new(ConditionExpression::Bracketed(Box::new(
+                                c_cond.clone()
+                            ))),
+                            right: Box::new(ConditionExpression::Bracketed(Box::new(
+                                d_cond.clone()
+                            ))),
+                        })
+                    ))),
+                })
+            ))
+        );
+    }
 }

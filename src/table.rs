@@ -4,3 +4,13 @@ pub struct Table {
     pub alias: Option<String>,
     pub schema: Option<String>,
 }
+
+impl From<String> for Table {
+    fn from(name: String) -> Self {
+        Table {
+            name,
+            alias: None,
+            schema: None,
+        }
+    }
+}

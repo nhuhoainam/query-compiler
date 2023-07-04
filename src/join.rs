@@ -1,10 +1,18 @@
-use nom::{IResult, combinator::{map, opt}, sequence::{tuple, delimited, terminated, preceded}, bytes::complete::{tag_no_case, tag}, character::complete::{multispace1, multispace0}, branch::alt};
+use nom::{
+    branch::alt,
+    bytes::complete::{tag, tag_no_case},
+    character::complete::{multispace0, multispace1},
+    combinator::{map, opt},
+    sequence::{delimited, preceded, terminated, tuple},
+    IResult,
+};
 
 use crate::{
     column::Column,
-    condition::{ConditionExpression, condition_expr},
-    select::{SelectStatement, nested_select_statement},
-    table::Table, common::{field_list, as_alias, table_reference, table_list},
+    common::{as_alias, field_list, table_list, table_reference},
+    condition::{condition_expr, ConditionExpression},
+    select::{nested_select_statement, SelectStatement},
+    table::Table,
 };
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
@@ -52,7 +60,6 @@ pub fn join_operator(i: &[u8]) -> IResult<&[u8], JoinOperator> {
     ))(i)
 }
 
-
 fn join_constraint(i: &[u8]) -> IResult<&[u8], JoinCondition> {
     let using_clause = map(
         tuple((
@@ -74,15 +81,16 @@ fn join_constraint(i: &[u8]) -> IResult<&[u8], JoinCondition> {
         ),
         condition_expr,
     ));
-    let on_clause = map(tuple((tag_no_case("on"), multispace1, on_constraint)), |t| {
-        JoinCondition::On(t.2)
-    });
+    let on_clause = map(
+        tuple((tag_no_case("on"), multispace1, on_constraint)),
+        |t| JoinCondition::On(t.2),
+    );
 
     alt((using_clause, on_clause))(i)
 }
 
 // Parse JOIN clause
-fn join_clause(i: &[u8]) -> IResult<&[u8], JoinClause> {
+pub fn join_clause(i: &[u8]) -> IResult<&[u8], JoinClause> {
     let (remaining_input, (_, _natural, operator, _, right, _, constraint)) = tuple((
         multispace0,
         opt(terminated(tag_no_case("natural"), multispace1)),
@@ -119,4 +127,234 @@ fn join_rhs(i: &[u8]) -> IResult<&[u8], JoinRightHand> {
         JoinRightHand::Tables(tables)
     });
     alt((nested_select, nested_join, table, tables))(i)
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        common::{Operator, FieldDefinitionExpression},
+        condition::{ConditionBase, ConditionTree},
+    };
+
+    use super::*;
+
+    #[test]
+    fn test_join_operator() {
+        assert_eq!(join_operator(b"join"), Ok((&[][..], JoinOperator::Natural)));
+        assert_eq!(
+            join_operator(b"natural join"),
+            Ok((&[][..], JoinOperator::Natural))
+        );
+        assert_eq!(
+            join_operator(b"left join"),
+            Ok((&[][..], JoinOperator::LeftOuter))
+        );
+        assert_eq!(
+            join_operator(b"right join"),
+            Ok((&[][..], JoinOperator::RightOuter))
+        );
+        assert_eq!(
+            join_operator(b"inner join"),
+            Ok((&[][..], JoinOperator::Inner))
+        );
+        assert_eq!(
+            join_operator(b"cross join"),
+            Ok((&[][..], JoinOperator::Cross))
+        );
+    }
+
+    #[test]
+    fn test_join_constraint() {
+        assert_eq!(
+            join_constraint(b"using (a, b, c)"),
+            Ok((
+                &[][..],
+                JoinCondition::Using(vec![
+                    Column::from("a"),
+                    Column::from("b"),
+                    Column::from("c")
+                ])
+            ))
+        );
+        assert_eq!(
+            join_constraint(b"on a = b"),
+            Ok((
+                &[][..],
+                JoinCondition::On(ConditionExpression::ComparisonOp(ConditionTree {
+                    operator: Operator::Equal,
+                    left: Box::new(ConditionExpression::Base(ConditionBase::Field(
+                        Column::from("a")
+                    ))),
+                    right: Box::new(ConditionExpression::Base(ConditionBase::Field(
+                        Column::from("b")
+                    ))),
+                }))
+            ))
+        );
+        assert_eq!(
+            join_constraint(b"on (a = b)"),
+            Ok((
+                &[][..],
+                JoinCondition::On(ConditionExpression::ComparisonOp(ConditionTree {
+                    operator: Operator::Equal,
+                    left: Box::new(ConditionExpression::Base(ConditionBase::Field(
+                        Column::from("a")
+                    ))),
+                    right: Box::new(ConditionExpression::Base(ConditionBase::Field(
+                        Column::from("b")
+                    ))),
+                }))
+            ))
+        );
+    }
+
+    #[test]
+    fn test_join_clause() {
+        assert_eq!(
+            join_clause(b"join t on a = b"),
+            Ok((
+                &[][..],
+                JoinClause {
+                    operator: JoinOperator::Natural,
+                    right: JoinRightHand::Table(Table::from("t".to_string())),
+                    constraint: JoinCondition::On(ConditionExpression::ComparisonOp(
+                        ConditionTree {
+                            operator: Operator::Equal,
+                            left: Box::new(ConditionExpression::Base(ConditionBase::Field(
+                                Column::from("a")
+                            ))),
+                            right: Box::new(ConditionExpression::Base(ConditionBase::Field(
+                                Column::from("b")
+                            ))),
+                        }
+                    ))
+                }
+            ))
+        );
+        assert_eq!(
+            join_clause(b"join t using (a, b, c)"),
+            Ok((
+                &[][..],
+                JoinClause {
+                    operator: JoinOperator::Natural,
+                    right: JoinRightHand::Table(Table::from("t".to_string())),
+                    constraint: JoinCondition::Using(vec![
+                        Column::from("a"),
+                        Column::from("b"),
+                        Column::from("c")
+                    ])
+                }
+            ))
+        );
+        assert_eq!(
+            join_clause(b"join (select * from t) as t2 on a = b"),
+            Ok((
+                &[][..],
+                JoinClause {
+                    operator: JoinOperator::Natural,
+                    right: JoinRightHand::NestedSelect(
+                        Box::new(SelectStatement {
+                            distinct: false,
+                            sel_list: vec![FieldDefinitionExpression::All],
+                            tables: vec![Table::from("t".to_string())],
+                            join: vec![],
+                            condition: None,
+                            group_by: None,
+                            order_by: None,
+                        }),
+                        Some(String::from("t2"))
+                    ),
+                    constraint: JoinCondition::On(ConditionExpression::ComparisonOp(
+                        ConditionTree {
+                            operator: Operator::Equal,
+                            left: Box::new(ConditionExpression::Base(ConditionBase::Field(
+                                Column::from("a")
+                            ))),
+                            right: Box::new(ConditionExpression::Base(ConditionBase::Field(
+                                Column::from("b")
+                            ))),
+                        }
+                    ))
+                }
+            ))
+        );
+        assert_eq!(
+            join_clause(b"join (select * from t) as t2 using (a, b, c)"),
+            Ok((
+                &[][..],
+                JoinClause {
+                    operator: JoinOperator::Natural,
+                    right: JoinRightHand::NestedSelect(
+                        Box::new(SelectStatement {
+                            distinct: false,
+                            sel_list: vec![FieldDefinitionExpression::All],
+                            tables: vec![Table::from("t".to_string())],
+                            join: vec![],
+                            condition: None,
+                            group_by: None,
+                            order_by: None,
+                        }),
+                        Some(String::from("t2"))
+                    ),
+                    constraint: JoinCondition::Using(vec![
+                        Column::from("a"),
+                        Column::from("b"),
+                        Column::from("c")
+                    ]),
+                }
+            ))
+        );
+        assert_eq!(
+            join_clause(b"join (select * from t) as t2 using (a, b, c)"),
+            Ok((
+                &[][..],
+                JoinClause {
+                    operator: JoinOperator::Natural,
+                    right: JoinRightHand::NestedSelect(
+                        Box::new(SelectStatement {
+                            distinct: false,
+                            sel_list: vec![FieldDefinitionExpression::All],
+                            tables: vec![Table::from("t".to_string())],
+                            join: vec![],
+                            condition: None,
+                            group_by: None,
+                            order_by: None,
+                        }),
+                        Some(String::from("t2"))
+                    ),
+                    constraint: JoinCondition::Using(vec![
+                        Column::from("a"),
+                        Column::from("b"),
+                        Column::from("c")
+                    ]),
+                }
+            ))
+        );
+        assert_eq!(
+            join_clause(b"join (select * from t) as t2 using (a, b, c)"),
+            Ok((
+                &[][..],
+                JoinClause {
+                    operator: JoinOperator::Natural,
+                    right: JoinRightHand::NestedSelect(
+                        Box::new(SelectStatement {
+                            distinct: false,
+                            sel_list: vec![FieldDefinitionExpression::All],
+                            tables: vec![Table::from("t".to_string())],
+                            join: vec![],
+                            condition: None,
+                            group_by: None,
+                            order_by: None,
+                        }),
+                        Some(String::from("t2"))
+                    ),
+                    constraint: JoinCondition::Using(vec![
+                        Column::from("a"),
+                        Column::from("b"),
+                        Column::from("c")
+                    ]),
+                }
+            ))
+        );
+    }
 }

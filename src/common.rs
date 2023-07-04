@@ -262,7 +262,7 @@ pub(crate) fn eof<I: Copy + InputLength, E: ParseError<I>>(input: I) -> IResult<
     }
 }
 
-/// Parse a terminator that ends a SQL statement.
+/// Parse a terminator that ends a SQL 4 .
 pub fn statement_terminator(i: &[u8]) -> IResult<&[u8], ()> {
     let (remaining_input, _) =
         delimited(multispace0, alt((tag(";"), line_ending, eof)), multispace0)(i)?;
