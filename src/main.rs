@@ -1,8 +1,8 @@
 use display_tree::{AsTree, CharSet, StyleBuilder};
-use query_compiler::{arithmetic::arithmetic_expression, common::literal_expression};
+use query_compiler::{arithmetic::arithmetic_expression, common::literal_expression, join::join_clause};
 
 fn main() {
-    let (_, res) = arithmetic_expression(b"1 + (2 + 3) + foo AS sth").unwrap();
+    let (_, res) = join_clause(b"inner join foo on foo.a = bar.a AND foo.a <> 1").unwrap();
     // let (_, res) = literal_expression(b"\'sth\' AS sth_else").unwrap();
     print!(
         "{}",

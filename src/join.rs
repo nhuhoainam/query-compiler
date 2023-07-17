@@ -1,15 +1,18 @@
+use std::fmt::{self, write};
+
+use display_tree::{AsTree, DisplayTree, StyleBuilder};
 use nom::{
     branch::alt,
     bytes::complete::{tag, tag_no_case},
     character::complete::{multispace0, multispace1},
     combinator::{map, opt},
     sequence::{delimited, preceded, terminated, tuple},
-    IResult,
+    IResult, AsChar,
 };
 
 use crate::{
     column::Column,
-    common::{as_alias, field_list, table_list, table_reference},
+    common::{as_alias, field_list, table_list, table_reference, opt_delimited},
     condition::{condition_expr, ConditionExpression},
     select::{nested_select_statement, SelectStatement},
     table::Table,
@@ -48,6 +51,82 @@ pub enum JoinCondition {
     Using(Vec<Column>),
 }
 
+impl fmt::Display for JoinRightHand {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            JoinRightHand::Table(ref t) => write!(f, "{}", t),
+            JoinRightHand::Tables(ref t) => write!(
+                f,
+                "{}",
+                t.iter()
+                    .map(|t| format!("{}", t))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            JoinRightHand::NestedSelect(ref s, ref a) => {
+                match a {
+                    Some(ref a) => write!(f, "({}) AS {}", s, a),
+                    None => write!(f, "({})", s),
+                }
+            }
+            JoinRightHand::NestedJoin(ref j) => write!(f, "{}", AsTree::new(&**j).indentation(1)),
+        }
+    }
+}
+
+impl fmt::Display for JoinCondition {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            JoinCondition::On(ref c) => write!(f, "ON {}", c),
+            JoinCondition::Using(ref c) => write!(
+                f,
+                "USING({})",
+                c.iter()
+                    .map(|c| format!("{}", c))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+        }
+    }
+}
+
+impl fmt::Display for JoinOperator {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            JoinOperator::Inner => write!(f, "INNER JOIN"),
+            JoinOperator::LeftOuter => write!(f, "LEFT OUTER JOIN"),
+            JoinOperator::RightOuter => write!(f, "RIGHT OUTER JOIN"),
+            JoinOperator::FullOuter => write!(f, "FULL OUTER JOIN"),
+            JoinOperator::Cross => write!(f, "CROSS JOIN"),
+            JoinOperator::Natural => write!(f, "NATURAL JOIN"),
+        }
+    }
+}
+
+impl DisplayTree for JoinClause {
+    fn fmt(&self, f: &mut std::fmt::Formatter, style: display_tree::Style) -> fmt::Result {
+        writeln!(f, "{}", self.operator)?;
+        writeln!(
+            f,
+            "{}{} {}",
+            style.char_set.connector,
+            std::iter::repeat(style.char_set.horizontal)
+                .take(style.indentation as usize)
+                .collect::<String>(),
+            self.right
+        )?;
+        write!(
+            f,
+            "{}{} {}",
+            style.char_set.end_connector,
+            std::iter::repeat(style.char_set.horizontal)
+                .take(style.indentation as usize)
+                .collect::<String>(),
+            self.constraint
+        )
+    }
+}
+
 // Parse binary comparison operators
 pub fn join_operator(i: &[u8]) -> IResult<&[u8], JoinOperator> {
     alt((
@@ -60,11 +139,10 @@ pub fn join_operator(i: &[u8]) -> IResult<&[u8], JoinOperator> {
 }
 
 fn join_constraint(i: &[u8]) -> IResult<&[u8], JoinCondition> {
-    println!("{:?}", i);
     let using_clause = map(
         tuple((
             tag_no_case("using"),
-            multispace1,
+            multispace0,
             delimited(
                 terminated(tag("("), multispace0),
                 field_list,
@@ -74,7 +152,7 @@ fn join_constraint(i: &[u8]) -> IResult<&[u8], JoinCondition> {
         |t| JoinCondition::Using(t.2),
     );
     let on_constraint = alt((
-        delimited(
+        opt_delimited(
             terminated(tag("("), multispace0),
             condition_expr,
             preceded(multispace0, tag(")")),
@@ -85,7 +163,7 @@ fn join_constraint(i: &[u8]) -> IResult<&[u8], JoinCondition> {
         tuple((tag_no_case("on"), multispace1, on_constraint)),
         |t| JoinCondition::On(t.2),
     );
-    
+
     alt((using_clause, on_clause))(i)
 }
 

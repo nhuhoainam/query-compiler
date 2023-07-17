@@ -146,7 +146,7 @@ impl fmt::Display for Operator {
             Operator::Like => "LIKE",
             Operator::NotLike => "NOT_LIKE",
             Operator::Equal => "=",
-            Operator::NotEqual => "!=",
+            Operator::NotEqual => "<>",
             Operator::Greater => ">",
             Operator::GreaterOrEqual => ">=",
             Operator::Less => "<",
