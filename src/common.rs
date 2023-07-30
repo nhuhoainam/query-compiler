@@ -2,18 +2,18 @@ use nom::{
     branch::alt,
     bytes::complete::{is_not, tag, tag_no_case, take, take_while1},
     character::{
-        complete::{digit1, line_ending, multispace0, multispace1},
+        complete::{digit1, line_ending, multispace0, multispace1, alphanumeric1},
         is_alphanumeric,
     },
     combinator::{map, not, opt, peek},
     error::{ErrorKind, ParseError},
-    multi::{fold_many0, many0},
+    multi::{fold_many0, many0, separated_list0},
     sequence::{delimited, pair, preceded, terminated, tuple},
     IResult, InputLength, Parser,
 };
 
 use crate::{
-    arithmetic::ArithmeticExpression, column::Column, keywords::sql_keywords, table::Table,
+    arithmetic::ArithmeticExpression, column::{Column, FunctionExpression, FunctionArgument, FunctionArguments}, keywords::sql_keywords, table::Table,
 };
 use std::{
     fmt,
@@ -91,6 +91,12 @@ pub enum Literal {
     Integer(i64),
     FixedPoint(Real),
     DateTime(String),
+}
+
+impl From<i64> for Literal {
+    fn from(i: i64) -> Self {
+        Literal::Integer(i)
+    }
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
@@ -257,9 +263,93 @@ pub fn column_identifier_no_alias(i: &[u8]) -> IResult<&[u8], Column> {
     })(i)
 }
 
+// Parses the argument for an aggregation function
+pub fn function_argument_parser(i: &[u8]) -> IResult<&[u8], FunctionArgument> {
+    map(column_identifier_no_alias, |c| c)(i)
+}
+
+// Parses the arguments for an aggregation function, and also returns whether the distinct flag is
+// present.
+pub fn function_arguments(i: &[u8]) -> IResult<&[u8], (FunctionArgument, bool)> {
+    let distinct_parser = opt(tuple((tag_no_case("distinct"), multispace1)));
+    let (remaining_input, (distinct, args)) = tuple((distinct_parser, function_argument_parser))(i)?;
+    Ok((remaining_input, (args, distinct.is_some())))
+}
+
+fn group_concat_fx_helper(i: &[u8]) -> IResult<&[u8], &[u8]> {
+    let ws_sep = preceded(multispace0, tag_no_case("separator"));
+    let (remaining_input, sep) = delimited(
+        ws_sep,
+        delimited(tag("'"), opt(alphanumeric1), tag("'")),
+        multispace0,
+    )(i)?;
+
+    Ok((remaining_input, sep.unwrap_or(&[0u8; 0])))
+}
+
+fn group_concat_fx(i: &[u8]) -> IResult<&[u8], (Column, Option<&[u8]>)> {
+    pair(column_identifier_no_alias, opt(group_concat_fx_helper))(i)
+}
+
+fn delim_fx_args(i: &[u8]) -> IResult<&[u8], (FunctionArgument, bool)> {
+    delimited(tag("("), function_arguments, tag(")"))(i)
+}
+
+pub fn column_function(i: &[u8]) -> IResult<&[u8], FunctionExpression> {
+    let delim_group_concat_fx = delimited(tag("("), group_concat_fx, tag(")"));
+    alt((
+        map(tag_no_case("count(*)"), |_| FunctionExpression::CountStar),
+        map(preceded(tag_no_case("count"), delim_fx_args), |args| {
+            FunctionExpression::Count(args.0.clone(), args.1)
+        }),
+        map(preceded(tag_no_case("sum"), delim_fx_args), |args| {
+            FunctionExpression::Sum(args.0.clone(), args.1)
+        }),
+        map(preceded(tag_no_case("avg"), delim_fx_args), |args| {
+            FunctionExpression::Avg(args.0.clone(), args.1)
+        }),
+        map(preceded(tag_no_case("max"), delim_fx_args), |args| {
+            FunctionExpression::Max(args.0.clone())
+        }),
+        map(preceded(tag_no_case("min"), delim_fx_args), |args| {
+            FunctionExpression::Min(args.0.clone())
+        }),
+        map(
+            preceded(tag_no_case("group_concat"), delim_group_concat_fx),
+            |spec| {
+                let (ref col, ref sep) = spec;
+                let sep = match *sep {
+                    // default separator is a comma, see MySQL manual §5.7
+                    None => String::from(","),
+                    Some(s) => String::from_utf8(s.to_vec()).unwrap(),
+                };
+                FunctionExpression::GroupConcat(col.clone(), sep)
+            },
+        ),
+        map(tuple((sql_identifier, multispace0, tag("("), separated_list0(tag(","), delimited(multispace0, function_argument_parser, multispace0)), tag(")"))), |tuple| {
+            let (name, _, _, arguments, _) = tuple;
+            FunctionExpression::Generic(
+                str::from_utf8(name).unwrap().to_string(), 
+                FunctionArguments::from(arguments))
+        })
+    ))(i)
+}
+
 /// Parse a SQL column identifier in the table.column format
 pub fn column_identifier(i: &[u8]) -> IResult<&[u8], Column> {
-    map(
+    let col_func_no_table = map(pair(column_function, opt(as_alias)), |tup| Column {
+        name: match tup.1 {
+            None => format!("{}", tup.0),
+            Some(a) => String::from(a),
+        },
+        alias: match tup.1 {
+            None => None,
+            Some(a) => Some(String::from(a)),
+        },
+        table: None,
+        function: Some(Box::new(tup.0)),
+    });
+    let col_w_table = map(
         tuple((
             opt(terminated(sql_identifier, tag("."))),
             sql_identifier,
@@ -277,7 +367,8 @@ pub fn column_identifier(i: &[u8]) -> IResult<&[u8], Column> {
             },
             function: None,
         },
-    )(i)
+    );
+    alt((col_func_no_table, col_w_table))(i)
 }
 
 /// Parse a reference to a named table, with an optional alias
@@ -313,13 +404,13 @@ pub fn binary_comparison_operator(i: &[u8]) -> IResult<&[u8], Operator> {
     alt((
         map(tag_no_case("and"), |_| Operator::And),
         map(tag_no_case("or"), |_| Operator::Or),
-        map(tag_no_case("="), |_| Operator::Equal),
         map(tag_no_case("!="), |_| Operator::NotEqual),
         map(tag_no_case("<>"), |_| Operator::NotEqual),
-        map(tag_no_case("<"), |_| Operator::Less),
         map(tag_no_case("<="), |_| Operator::LessOrEqual),
-        map(tag_no_case(">"), |_| Operator::Greater),
         map(tag_no_case(">="), |_| Operator::GreaterOrEqual),
+        map(tag_no_case("="), |_| Operator::Equal),
+        map(tag_no_case("<"), |_| Operator::Less),
+        map(tag_no_case(">"), |_| Operator::Greater),
         map(tag_no_case("like"), |_| Operator::Like),
         map(tag_no_case("not like"), |_| Operator::NotLike),
         map(tag_no_case("in"), |_| Operator::In),

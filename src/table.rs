@@ -40,3 +40,24 @@ impl fmt::Display for Table {
         }
     }
 }
+
+
+impl<'a> From<&'a str> for Table {
+    fn from(t: &str) -> Table {
+        Table {
+            name: String::from(t),
+            alias: None,
+            schema: None,
+        }
+    }
+}
+
+impl<'a> From<(&'a str, &'a str)> for Table {
+    fn from(t: (&str, &str)) -> Table {
+        Table {
+            name: String::from(t.1),
+            alias: None,
+            schema: Some(String::from(t.0)),
+        }
+    }
+}

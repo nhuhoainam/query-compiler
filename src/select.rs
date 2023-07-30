@@ -19,7 +19,7 @@ use crate::{
     condition::{condition_expr, ConditionExpression},
     join::{join_clause, JoinClause},
     order::{order_by_clause, OrderByClause},
-    table::Table,
+    table::Table, arithmetic::arithmetic_expression,
 };
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
@@ -35,7 +35,7 @@ pub struct GroupByClause {
     pub having: Option<ConditionExpression>,
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub struct SelectStatement {
     pub distinct: bool,
     pub sel_list: Vec<FieldDefinitionExpression>,
@@ -121,6 +121,9 @@ pub fn field_definition_expression(
             map(tag("*"), |_| FieldDefinitionExpression::All),
             map(terminated(table_reference, tag(".*")), |table| {
                 FieldDefinitionExpression::AllFromTable(table)
+            }),
+            map(arithmetic_expression, |expr| {
+                FieldDefinitionExpression::FieldValue(FieldValueExpression::Arithmetic(expr))
             }),
             map(column_identifier, |col| {
                 FieldDefinitionExpression::Column(col)

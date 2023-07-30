@@ -2,7 +2,7 @@ use std::fmt;
 
 use crate::{common::TreeNode, keywords::escape_if_keyword};
 
-type FunctionArgument = Column;
+pub type FunctionArgument = Column;
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub enum FunctionExpression {

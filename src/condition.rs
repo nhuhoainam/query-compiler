@@ -207,10 +207,18 @@ fn in_operation(i: &[u8]) -> IResult<&[u8], (Operator, ConditionExpression)> {
             terminated(tag_no_case("in"), multispace0),
             alt((
                 map(
-                    delimited(tag("("), nested_select_statement, tag(")")),
+                    delimited(
+                        terminated(tag("("), multispace0), 
+                        nested_select_statement,
+                        delimited(multispace0, tag(")"), multispace0)
+                    ),
                     |s| ConditionBase::NestedSelect(Box::new(s)),
                 ),
-                map(delimited(tag("("), value_list, tag(")")), |vs| {
+                map(delimited(
+                    terminated(tag("("), multispace0), 
+                    value_list, 
+                    delimited(multispace0, tag(")"), multispace0)
+                ), |vs| {
                     ConditionBase::LiteralList(vs)
                 }),
             )),
@@ -343,7 +351,27 @@ pub fn parenthesized_expr(i: &[u8]) -> IResult<&[u8], ConditionExpression> {
 
 #[cfg(test)]
 mod tests {
+    use crate::{common::{FieldDefinitionExpression}, table::{Table, self}, select};
+
     use super::*;
+
+    fn columns(cols: &[&str]) -> Vec<FieldDefinitionExpression> {
+        cols.iter()
+            .map(|c| FieldDefinitionExpression::Column(Column::from(*c)))
+            .collect()
+    }
+
+    fn flat_condition_tree(
+        op: Operator,
+        l: ConditionBase,
+        r: ConditionBase,
+    ) -> ConditionExpression {
+        ConditionExpression::ComparisonOp(ConditionTree {
+            operator: op,
+            left: Box::new(ConditionExpression::Base(l)),
+            right: Box::new(ConditionExpression::Base(r)),
+        })
+    }
 
     #[test]
     fn test_condition_expr() {
@@ -595,5 +623,91 @@ mod tests {
                 })
             ))
         );
+    }
+
+    #[test]
+    fn nested_select() {
+        let cond = "ID NOT IN ( SELECT DISTINCT ID FROM Takes WHERE Takes.[year] < 2023 ) ";
+
+        let res = condition_expr(cond.as_bytes());
+
+        let nested_select = Box::new(SelectStatement {
+            distinct: true,
+            sel_list: columns(&["ID"]),
+            tables: vec![Table::from("Takes")],
+            condition: Some(ConditionExpression::ComparisonOp(ConditionTree {
+                operator: Operator::Less,
+                left: Box::new(ConditionExpression::Base(ConditionBase::Field(
+                    Column::from("Takes.year"),
+                ))),
+                right: Box::new(ConditionExpression::Base(ConditionBase::Literal(
+                    Literal::Integer(2023),
+                ))),
+            })),
+            ..Default::default()
+        });
+
+        let expected = ConditionExpression::ComparisonOp(ConditionTree {
+            operator: Operator::NotIn,
+            left: Box::new(ConditionExpression::Base(ConditionBase::Field(Column::from("ID")))),
+            right: Box::new(ConditionExpression::Base(ConditionBase::NestedSelect(
+                nested_select,
+            ))),
+        });
+
+        assert_eq!(res.unwrap().1, expected);
+    }
+
+    #[test]
+    fn and_with_nested_select() {
+        use select::SelectStatement;
+        use std::default::Default;
+        use table::Table;
+        use ConditionBase::*;
+
+        let cond = "paperId not in (select paperId from PaperConflict) and size > 0";
+
+        let res = condition_expr(cond.as_bytes());
+
+        let nested_select = Box::new(SelectStatement {
+            tables: vec![Table::from("PaperConflict")],
+            sel_list: columns(&["paperId"]),
+            ..Default::default()
+        });
+
+        let left = flat_condition_tree(
+            Operator::NotIn,
+            Field("paperId".into()),
+            NestedSelect(nested_select),
+        );
+
+        let right = flat_condition_tree(Operator::Greater, Field("size".into()), Literal(0.into()));
+
+        let expected = ConditionExpression::LogicalOp(ConditionTree {
+            left: Box::new(left),
+            right: Box::new(right),
+            operator: Operator::And,
+        });
+
+        assert_eq!(res.unwrap().1, expected);
+    }
+
+    #[test]
+    fn not_in_comparison() {
+        use ConditionBase::*;
+
+        let qs1 = b"id not in (1,2)";
+        let res1 = condition_expr(qs1);
+
+        let c1 = res1.unwrap().1;
+        let expected1 = flat_condition_tree(
+            Operator::NotIn,
+            Field("id".into()),
+            LiteralList(vec![1.into(), 2.into()]),
+        );
+        assert_eq!(c1, expected1);
+
+        let expected1 = "id NOT IN (1, 2)";
+        assert_eq!(format!("{}", c1), expected1);
     }
 }
