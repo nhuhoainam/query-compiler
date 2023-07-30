@@ -1,4 +1,3 @@
-use display_tree::DisplayTree;
 use nom::{
     branch::alt,
     bytes::complete::{is_not, tag, tag_no_case, take, take_while1},
@@ -21,18 +20,44 @@ use std::{
     str::{self, FromStr},
 };
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize, DisplayTree)]
-pub enum FieldDefinitionExpression {
-    All,
-    AllFromTable(#[node_label] Table),
-    Column(Column),
-    FieldValue(#[tree] FieldValueExpression),
+pub trait TreeNode {
+    fn populate(&self);
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize, DisplayTree)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+pub enum FieldDefinitionExpression {
+    All,
+    AllFromTable(Table),
+    Column(Column),
+    FieldValue(FieldValueExpression),
+}
+
+impl TreeNode for FieldDefinitionExpression {
+    fn populate(&self) {
+        match self {
+            FieldDefinitionExpression::All => add_leaf!("*"),
+            FieldDefinitionExpression::AllFromTable(ref table) => {
+                add_leaf!("{}.{}", table.name, "*")
+            }
+            FieldDefinitionExpression::Column(ref col) => col.populate(),
+            FieldDefinitionExpression::FieldValue(ref fv) => fv.populate(),
+        };
+    }
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub enum FieldValueExpression {
-    Arithmetic(#[tree] ArithmeticExpression),
-    Literal(#[tree] LiteralExpression),
+    Arithmetic(ArithmeticExpression),
+    Literal(LiteralExpression),
+}
+
+impl TreeNode for FieldValueExpression {
+    fn populate(&self) {
+        match self {
+            FieldValueExpression::Arithmetic(ref ari) => ari.populate(),
+            FieldValueExpression::Literal(ref lit) => lit.populate(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
@@ -52,7 +77,7 @@ pub enum Operator {
     Is,
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize, DisplayTree)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub struct Real {
     pub integral: i32,
     pub fractional: i32,
@@ -72,6 +97,18 @@ pub enum Literal {
 pub struct LiteralExpression {
     pub value: Literal,
     pub alias: Option<String>,
+}
+
+impl TreeNode for LiteralExpression {
+    fn populate(&self) {
+        match self.alias {
+            Some(ref alias) => {
+                add_branch!("{}", alias);
+                add_leaf!("{}", self.value)
+            }
+            None => add_leaf!("{}", self.value),
+        }
+    }
 }
 
 impl fmt::Display for Literal {
@@ -107,26 +144,6 @@ impl fmt::Display for LiteralExpression {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.alias {
             Some(ref alias) => write!(f, "{} AS {}", self.value.to_string(), alias),
-            None => write!(f, "{}", self.value.to_string()),
-        }
-    }
-}
-
-impl DisplayTree for LiteralExpression {
-    fn fmt(&self, f: &mut fmt::Formatter, style: display_tree::Style) -> fmt::Result {
-        match self.alias {
-            Some(ref alias) => {
-                writeln!(f, "{}", alias)?;
-                write!(
-                    f,
-                    "{}{} {}",
-                    style.char_set.end_connector,
-                    std::iter::repeat(style.char_set.horizontal)
-                        .take(style.indentation as usize)
-                        .collect::<String>(),
-                    self.value
-                )
-            }
             None => write!(f, "{}", self.value.to_string()),
         }
     }
@@ -304,9 +321,9 @@ pub fn binary_comparison_operator(i: &[u8]) -> IResult<&[u8], Operator> {
         map(tag_no_case(">"), |_| Operator::Greater),
         map(tag_no_case(">="), |_| Operator::GreaterOrEqual),
         map(tag_no_case("like"), |_| Operator::Like),
-        map(tag_no_case("not_like"), |_| Operator::NotLike),
+        map(tag_no_case("not like"), |_| Operator::NotLike),
         map(tag_no_case("in"), |_| Operator::In),
-        map(tag_no_case("not_in"), |_| Operator::NotIn),
+        map(tag_no_case("not in"), |_| Operator::NotIn),
         map(tag_no_case("is"), |_| Operator::Is),
     ))(i)
 }

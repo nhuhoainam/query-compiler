@@ -5,8 +5,10 @@ extern crate nom;
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;
+// #[macro_use]
+// extern crate display_tree_derive;
 #[macro_use]
-extern crate display_tree_derive;
+extern crate debug_tree;
 
 #[macro_use]
 pub mod arithmetic;

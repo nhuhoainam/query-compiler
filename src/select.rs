@@ -14,7 +14,7 @@ use crate::{
     column::Column,
     common::{
         column_identifier, field_list, literal_expression, statement_terminator, table_list,
-        table_reference, ws_sep_comma, FieldDefinitionExpression, FieldValueExpression,
+        table_reference, ws_sep_comma, FieldDefinitionExpression, FieldValueExpression, TreeNode,
     },
     condition::{condition_expr, ConditionExpression},
     join::{join_clause, JoinClause},
@@ -44,6 +44,43 @@ pub struct SelectStatement {
     pub condition: Option<ConditionExpression>,
     pub group_by: Option<GroupByClause>,
     pub order_by: Option<OrderByClause>,
+}
+
+impl TreeNode for SelectStatement {
+    fn populate(&self) {
+        add_branch!("<Query>");
+        add_branch!("SELECT{}", if self.distinct { " DISTINCT" } else { "" });
+        for sel_item in self.sel_list.iter() {
+            sel_item.populate();
+        }
+        add_branch!("FROM");
+        for table in self.tables.iter() {
+            table.populate();
+        }
+        for join in self.join.iter() {
+            join.populate();
+        }
+        if let Some(ref condition) = self.condition {
+            add_branch!("WHERE");
+            condition.populate();
+        }
+        if let Some(ref group_by) = self.group_by {
+            add_branch!("GROUP BY");
+            for col in group_by.columns.iter() {
+                col.populate();
+            }
+            if let Some(ref having) = group_by.having {
+                add_branch!("HAVING");
+                having.populate();
+            }
+        }
+        if let Some(ref order_by) = self.order_by {
+            add_branch!("ORDER BY");
+            for col in order_by.columns.iter() {
+                add_leaf!("{} {}", col.0.name, col.1);
+            }
+        }
+    }
 }
 
 impl fmt::Display for SelectStatement {

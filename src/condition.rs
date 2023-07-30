@@ -13,7 +13,7 @@ use crate::{
     arithmetic::{arithmetic_expression, ArithmeticExpression},
     column::Column,
     common::{
-        binary_comparison_operator, column_identifier, literal, value_list, Literal, Operator,
+        binary_comparison_operator, column_identifier, literal, value_list, Literal, Operator, TreeNode,
     },
     select::{nested_select_statement, SelectStatement},
 };
@@ -42,6 +42,53 @@ pub enum ConditionExpression {
     Base(ConditionBase),
     Arithmetic(Box<ArithmeticExpression>),
     Bracketed(Box<ConditionExpression>),
+}
+
+impl TreeNode for ConditionExpression {
+    fn populate(&self) {
+        match self {
+            ConditionExpression::ComparisonOp(c) => {
+                add_branch!("{}", c.operator);
+                c.left.populate();
+                c.right.populate();
+            }
+            ConditionExpression::LogicalOp(c) => {
+                add_branch!("{}", c.operator);
+                c.left.populate();
+                c.right.populate();
+            }
+            ConditionExpression::NegationOp(c) => {
+                add_branch!("NOT");
+                c.populate();
+            }
+            ConditionExpression::ExistsOp(s) => {
+                add_branch!("EXISTS");
+                s.populate();
+            }
+            ConditionExpression::Base(b) => b.populate(),
+            ConditionExpression::Arithmetic(a) => a.populate(),
+            ConditionExpression::Bracketed(c) => {
+                add_branch!("()");
+                c.populate();
+            }
+        }
+    }
+}
+
+impl TreeNode for ConditionBase {
+    fn populate(&self) {
+        match self {
+            ConditionBase::Field(c) => c.populate(),
+            ConditionBase::Literal(l) => add_leaf!("{}", l),
+            ConditionBase::LiteralList(l) => {
+                add_branch!("()");
+                for lit in l.iter() {
+                    add_leaf!("{}", lit);
+                }
+            }
+            ConditionBase::NestedSelect(s) => s.populate(),
+        }
+    }
 }
 
 impl fmt::Display for ConditionBase {

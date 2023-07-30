@@ -1,28 +1,35 @@
-use std::fmt::{self, write};
+use std::fmt;
 
-use display_tree::{AsTree, DisplayTree, StyleBuilder};
 use nom::{
     branch::alt,
     bytes::complete::{tag, tag_no_case},
     character::complete::{multispace0, multispace1},
     combinator::{map, opt},
     sequence::{delimited, preceded, terminated, tuple},
-    IResult, AsChar,
+    IResult,
 };
 
 use crate::{
     column::Column,
-    common::{as_alias, field_list, table_list, table_reference, opt_delimited},
+    common::{as_alias, field_list, table_list, table_reference, opt_delimited, TreeNode},
     condition::{condition_expr, ConditionExpression},
     select::{nested_select_statement, SelectStatement},
     table::Table,
 };
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
-pub struct JoinClause {
+pub struct  JoinClause {
     pub operator: JoinOperator,
     pub right: JoinRightHand,
     pub constraint: JoinCondition,
+}
+
+impl TreeNode for JoinClause {
+    fn populate(&self) {
+        add_branch!("{}", self.operator);
+        self.right.populate();
+        self.constraint.populate();
+    }
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
@@ -33,6 +40,31 @@ pub enum JoinRightHand {
     // A nested selection, represented as (query, alias).
     NestedSelect(Box<SelectStatement>, Option<String>),
     NestedJoin(Box<JoinClause>),
+}
+
+impl TreeNode for JoinRightHand {
+    fn populate(&self) {
+        match self {
+            JoinRightHand::Table(ref t) => t.populate(),
+            JoinRightHand::Tables(ref t) => {
+                for table in t.iter() {
+                    table.populate();
+                }
+            }
+            JoinRightHand::NestedSelect(ref s, ref a) => {
+                match a {
+                    Some(ref a) => {
+                        add_branch!("{}", a);
+                        s.populate();
+                    }
+                    None => s.populate(),
+                }
+            }
+            JoinRightHand::NestedJoin(ref j) => {
+                j.populate();
+            }
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
@@ -49,6 +81,19 @@ pub enum JoinOperator {
 pub enum JoinCondition {
     On(ConditionExpression),
     Using(Vec<Column>),
+}
+
+impl TreeNode for JoinCondition {
+    fn populate(&self) {
+        match self {
+            JoinCondition::On(ref c) => add_leaf!("{}", c),
+            JoinCondition::Using(ref c) => {
+                for column in c.iter() {
+                    column.populate();
+                }
+            }
+        }
+    }
 }
 
 impl fmt::Display for JoinRightHand {
@@ -69,7 +114,7 @@ impl fmt::Display for JoinRightHand {
                     None => write!(f, "({})", s),
                 }
             }
-            JoinRightHand::NestedJoin(ref j) => write!(f, "{}", AsTree::new(&**j).indentation(1)),
+            JoinRightHand::NestedJoin(ref j) => write!(f, "{}", j),
         }
     }
 }
@@ -90,6 +135,15 @@ impl fmt::Display for JoinCondition {
     }
 }
 
+impl fmt::Display for JoinClause {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.operator)?;
+        write!(f, " {}", self.right)?;
+        write!(f, " {}", self.constraint)?;
+        Ok(())
+    }
+}
+
 impl fmt::Display for JoinOperator {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -100,30 +154,6 @@ impl fmt::Display for JoinOperator {
             JoinOperator::Cross => write!(f, "CROSS JOIN"),
             JoinOperator::Natural => write!(f, "NATURAL JOIN"),
         }
-    }
-}
-
-impl DisplayTree for JoinClause {
-    fn fmt(&self, f: &mut std::fmt::Formatter, style: display_tree::Style) -> fmt::Result {
-        writeln!(f, "{}", self.operator)?;
-        writeln!(
-            f,
-            "{}{} {}",
-            style.char_set.connector,
-            std::iter::repeat(style.char_set.horizontal)
-                .take(style.indentation as usize)
-                .collect::<String>(),
-            self.right
-        )?;
-        write!(
-            f,
-            "{}{} {}",
-            style.char_set.end_connector,
-            std::iter::repeat(style.char_set.horizontal)
-                .take(style.indentation as usize)
-                .collect::<String>(),
-            self.constraint
-        )
     }
 }
 

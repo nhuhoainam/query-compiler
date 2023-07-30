@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::keywords::escape_if_keyword;
+use crate::{common::TreeNode, keywords::escape_if_keyword};
 
 type FunctionArgument = Column;
 
@@ -69,6 +69,38 @@ pub struct Column {
     pub alias: Option<String>,
     pub table: Option<String>,
     pub function: Option<Box<FunctionExpression>>,
+}
+
+impl TreeNode for Column {
+    fn populate(&self) {
+        match self.alias {
+            Some(ref alias) => match self.function {
+                Some(ref fnt) => {
+                    add_branch!("{}", escape_if_keyword(alias));
+                    add_leaf!("{}", fnt)
+                }
+                None => {
+                    add_branch!("{}", escape_if_keyword(alias));
+                    add_leaf!(
+                        "{}",
+                        if let Some(ref table) = self.table {
+                            format!("{}.{}", escape_if_keyword(table), escape_if_keyword(&self.name))
+                        } else {
+                            escape_if_keyword(&self.name)
+                        },
+                    );
+                }
+            },
+            None => add_leaf!(
+                "{}",
+                if let Some(ref table) = self.table {
+                    format!("{}.{}", escape_if_keyword(table), escape_if_keyword(&self.name))
+                } else {
+                    escape_if_keyword(&self.name)
+                },
+            )
+        }
+    }
 }
 
 impl fmt::Display for Column {

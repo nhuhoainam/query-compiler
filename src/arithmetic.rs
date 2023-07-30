@@ -1,6 +1,5 @@
 use std::fmt::{self, Formatter};
 
-use display_tree::DisplayTree;
 use nom::{
     branch::alt,
     bytes::complete::tag,
@@ -13,7 +12,7 @@ use nom::{
 
 use crate::{
     column::Column,
-    common::{as_alias, column_identifier_no_alias, integer_literal, Literal},
+    common::{as_alias, column_identifier_no_alias, integer_literal, Literal, TreeNode},
 };
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
@@ -51,6 +50,18 @@ pub enum ArithmeticOperator {
 pub struct ArithmeticExpression {
     pub ari: Arithmetic,
     pub alias: Option<String>,
+}
+
+impl TreeNode for ArithmeticExpression {
+    fn populate(&self) {
+        match self.alias {
+            Some(ref alias) => {
+                add_branch!("{}", alias);
+                add_leaf!("{}", self.ari);
+            }
+            None => add_leaf!("{}", self.ari),
+        }
+    }
 }
 
 impl ArithmeticExpression {
@@ -121,26 +132,6 @@ impl fmt::Display for ArithmeticExpression {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.alias {
             Some(ref alias) => write!(f, "{} AS {}", self.ari, alias),
-            None => write!(f, "{}", self.ari),
-        }
-    }
-}
-
-impl DisplayTree for ArithmeticExpression {
-    fn fmt(&self, f: &mut fmt::Formatter, style: display_tree::Style) -> fmt::Result {
-        match self.alias {
-            Some(ref alias) => {
-                writeln!(f, "{}", alias)?;
-                write!(
-                    f,
-                    "{}{} {}",
-                    style.char_set.end_connector,
-                    std::iter::repeat(style.char_set.horizontal)
-                        .take(style.indentation as usize)
-                        .collect::<String>(),
-                    self.ari
-                )
-            }
             None => write!(f, "{}", self.ari),
         }
     }
