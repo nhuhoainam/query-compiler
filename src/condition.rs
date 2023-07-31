@@ -631,7 +631,7 @@ mod tests {
 
     #[test]
     fn comparison_nested_select() {
-        let cond = "salary = (SELECT MAX(salary) FROM Instructor)";
+        let cond = "salary = ALL ( SELECT MAX(salary) FROM Instructor )";
 
         let res = condition_expr(cond.as_bytes());
 
@@ -649,7 +649,7 @@ mod tests {
         });
 
         let expected = ConditionExpression::ComparisonOp(ConditionTree {
-            operator: Operator::Equal,
+            operator: Operator::All(Box::new(Operator::Equal)),
             left: Box::new(ConditionExpression::Base(ConditionBase::Field(
                 Column::from("salary"),
             ))),

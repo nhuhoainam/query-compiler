@@ -8,7 +8,7 @@ use nom::{
     combinator::{map, not, opt, peek},
     error::{ErrorKind, ParseError},
     multi::{fold_many0, many0, separated_list0},
-    sequence::{delimited, pair, preceded, terminated, tuple},
+    sequence::{delimited, pair, preceded, terminated, tuple, separated_pair},
     IResult, InputLength, Parser,
 };
 
@@ -70,6 +70,8 @@ pub enum Operator {
     LessOrEqual,
     Greater,
     GreaterOrEqual,
+    All(Box<Operator>),
+    Any(Box<Operator>),
     Like,
     NotLike,
     In,
@@ -177,6 +179,8 @@ impl fmt::Display for Operator {
             Operator::In => "IN",
             Operator::NotIn => "NOT IN",
             Operator::Is => "IS",
+            Operator::All(ref inner_op) => return write!(f, "{} ALL", inner_op),
+            Operator::Any(ref inner_op) => return write!(f, "{} ANY", inner_op),
         };
         write!(f, "{}", op)
     }
@@ -399,11 +403,8 @@ pub fn statement_terminator(i: &[u8]) -> IResult<&[u8], ()> {
     Ok((remaining_input, ()))
 }
 
-/// Parse binary comparison operators
-pub fn binary_comparison_operator(i: &[u8]) -> IResult<&[u8], Operator> {
+fn binary_comparison_helper(i: &[u8]) -> IResult<&[u8], Operator> {
     alt((
-        map(tag_no_case("and"), |_| Operator::And),
-        map(tag_no_case("or"), |_| Operator::Or),
         map(tag_no_case("!="), |_| Operator::NotEqual),
         map(tag_no_case("<>"), |_| Operator::NotEqual),
         map(tag_no_case("<="), |_| Operator::LessOrEqual),
@@ -411,7 +412,30 @@ pub fn binary_comparison_operator(i: &[u8]) -> IResult<&[u8], Operator> {
         map(tag_no_case("="), |_| Operator::Equal),
         map(tag_no_case("<"), |_| Operator::Less),
         map(tag_no_case(">"), |_| Operator::Greater),
-        map(tag_no_case("like"), |_| Operator::Like),
+    ))(i)
+}
+
+/// Parse binary comparison operators
+pub fn binary_comparison_operator(i: &[u8]) -> IResult<&[u8], Operator> {
+    alt((
+        map(tag_no_case("and"), |_| Operator::And),
+        map(tag_no_case("or"), |_| Operator::Or),
+        map(separated_pair(
+            binary_comparison_helper,
+            multispace0,
+            opt(alt((
+                delimited(multispace0, tag_no_case("all"), multispace0), 
+                delimited(multispace0, tag_no_case("any"), multispace0),
+            ))
+        )), |(op, quantifier)| 
+            match quantifier {
+                Some(b) => match str::from_utf8(b).unwrap().to_lowercase().as_str() {
+                    "all" => Operator::All(Box::new(op)),
+                    "any" => Operator::Any(Box::new(op)),
+                    e => panic!("Error parsing quantifier: {:?}", e),
+                },
+                None => op,
+            }),
         map(tag_no_case("not like"), |_| Operator::NotLike),
         map(tag_no_case("in"), |_| Operator::In),
         map(tag_no_case("not in"), |_| Operator::NotIn),
