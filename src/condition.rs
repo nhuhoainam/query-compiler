@@ -210,14 +210,14 @@ fn in_operation(i: &[u8]) -> IResult<&[u8], (Operator, ConditionExpression)> {
                     delimited(
                         terminated(tag("("), multispace0), 
                         nested_select_statement,
-                        delimited(multispace0, tag(")"), multispace0)
+                        preceded(multispace0, tag(")"))
                     ),
                     |s| ConditionBase::NestedSelect(Box::new(s)),
                 ),
                 map(delimited(
                     terminated(tag("("), multispace0), 
                     value_list, 
-                    delimited(multispace0, tag(")"), multispace0)
+                    preceded(multispace0, tag(")"))
                 ), |vs| {
                     ConditionBase::LiteralList(vs)
                 }),
@@ -304,7 +304,11 @@ fn simple_expr(i: &[u8]) -> IResult<&[u8], ConditionExpression> {
             ConditionExpression::Base(ConditionBase::Field(f))
         }),
         map(
-            delimited(tag("("), nested_select_statement, tag(")")),
+            delimited(
+                terminated(tag("("), multispace0), 
+                nested_select_statement, 
+                preceded(multispace0, tag(")")),
+            ),
             |s| ConditionExpression::Base(ConditionBase::NestedSelect(Box::new(s))),
         ),
     ))(i)
@@ -351,7 +355,7 @@ pub fn parenthesized_expr(i: &[u8]) -> IResult<&[u8], ConditionExpression> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{common::{FieldDefinitionExpression}, table::{Table, self}, select};
+    use crate::{common::FieldDefinitionExpression, table::{Table, self}, select, column::FunctionExpression};
 
     use super::*;
 
@@ -623,6 +627,38 @@ mod tests {
                 })
             ))
         );
+    }
+
+    #[test]
+    fn comparison_nested_select() {
+        let cond = "salary = (SELECT MAX(salary) FROM Instructor)";
+
+        let res = condition_expr(cond.as_bytes());
+
+        let nested_select = Box::new(SelectStatement {
+            sel_list: vec![
+                FieldDefinitionExpression::Column(Column { 
+                    name: "max(salary)".to_string(), 
+                    alias: None, 
+                    table: None, 
+                    function: Some(Box::new(FunctionExpression::Max(Column::from("salary")))),
+                }),
+            ],
+            tables: vec![Table::from("Instructor")],
+            ..Default::default()
+        });
+
+        let expected = ConditionExpression::ComparisonOp(ConditionTree {
+            operator: Operator::Equal,
+            left: Box::new(ConditionExpression::Base(ConditionBase::Field(
+                Column::from("salary"),
+            ))),
+            right: Box::new(ConditionExpression::Base(ConditionBase::NestedSelect(
+                nested_select,
+            ))),
+        });
+
+        assert_eq!(res.unwrap().1, expected);
     }
 
     #[test]
