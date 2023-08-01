@@ -245,3 +245,47 @@ pub fn arithmetic_expression(i: &[u8]) -> IResult<&[u8], ArithmeticExpression> {
         },
     )(i)
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::column::FunctionExpression;
+
+    use super::*;
+
+    #[test]
+    fn column_arithmetic() {
+        let res = arithmetic_expression(b"SUM(foo) / bar");
+        assert_eq!(
+            res,
+            Ok((
+                "".as_bytes(),
+                ArithmeticExpression {
+                    ari: Arithmetic::Expr {
+                        operator: ArithmeticOperator::Divide,
+                        left: Box::new(Arithmetic::Base(ArithmeticBase::Column(Column {
+                            name: "sum(foo)".to_string(),
+                            alias: None,
+                            table: None,
+                            function: Some(Box::new(FunctionExpression::Sum(
+                                Column {
+                                    name: "foo".to_string(),
+                                    alias: None,
+                                    table: None,
+                                    function: None
+                                },
+                                false
+                            ))),
+                        }))),
+                        right: Box::new(Arithmetic::Base(ArithmeticBase::Column(Column {
+                            name: "bar".to_string(),
+                            alias: None,
+                            table: None,
+                            function: None,
+                        }))),
+                    },
+                    alias: None,
+                }
+            ))
+        );
+    }
+}

@@ -256,15 +256,23 @@ pub fn as_alias(i: &[u8]) -> IResult<&[u8], &str> {
 pub fn column_identifier_no_alias(i: &[u8]) -> IResult<&[u8], Column> {
     let table_parser = pair(opt(terminated(sql_identifier, tag("."))), sql_identifier);
 
-    map(table_parser, |tup| Column {
-        name: str::from_utf8(tup.1).unwrap().to_string(),
-        alias: None,
-        table: match tup.0 {
-            None => None,
-            Some(t) => Some(str::from_utf8(t).unwrap().to_string()),
-        },
-        function: None,
-    })(i)
+    alt((
+        map(column_function, |f| Column {
+            name: format!("{}", f),
+            alias: None,
+            table: None,
+            function: Some(Box::new(f)),
+        }),
+        map(table_parser, |tup| Column {
+            name: str::from_utf8(tup.1).unwrap().to_string(),
+            alias: None,
+            table: match tup.0 {
+                None => None,
+                Some(t) => Some(str::from_utf8(t).unwrap().to_string()),
+            },
+            function: None,
+        })
+    ))(i)
 }
 
 // Parses the argument for an aggregation function
