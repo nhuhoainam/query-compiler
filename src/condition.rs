@@ -1,5 +1,6 @@
 use std::fmt;
 
+use debug_tree::TreeBuilder;
 use nom::{
     branch::alt,
     bytes::complete::{tag, tag_no_case},
@@ -45,48 +46,54 @@ pub enum ConditionExpression {
 }
 
 impl TreeNode for ConditionExpression {
-    fn populate(&self) {
+    fn populate(&self, parent: &TreeBuilder) {
         match self {
             ConditionExpression::ComparisonOp(c) => {
-                add_branch!("{}", c.operator);
-                c.left.populate();
-                c.right.populate();
+                let mut branch = parent.add_branch(format!("{}", c.operator).as_str());
+                c.left.populate(parent);
+                c.right.populate(parent);
+                branch.release();
             }
             ConditionExpression::LogicalOp(c) => {
-                add_branch!("{}", c.operator);
-                c.left.populate();
-                c.right.populate();
+                let mut branch = parent.add_branch(format!("{}", c.operator).as_str());
+                c.left.populate(parent);
+                c.right.populate(parent);
+                branch.release();
             }
             ConditionExpression::NegationOp(c) => {
-                add_branch!("NOT");
-                c.populate();
+                let mut branch = parent.add_branch("NOT");
+                c.populate(parent);
+                branch.release();
             }
             ConditionExpression::ExistsOp(s) => {
-                add_branch!("EXISTS");
-                s.populate();
+                let mut branch = parent.add_branch("EXISTS");
+                s.populate(parent);
+                branch.release();
             }
-            ConditionExpression::Base(b) => b.populate(),
-            ConditionExpression::Arithmetic(a) => a.populate(),
+            ConditionExpression::Base(b) => b.populate(parent),
+            ConditionExpression::Arithmetic(a) => a.populate(parent),
             ConditionExpression::Bracketed(c) => {
-                add_branch!("()");
-                c.populate();
+                let mut branch = parent.add_branch("()");
+                c.populate(parent);
+                branch.release();
             }
         }
     }
 }
 
 impl TreeNode for ConditionBase {
-    fn populate(&self) {
+    fn populate(&self, parent: &TreeBuilder) {
         match self {
-            ConditionBase::Field(c) => c.populate(),
-            ConditionBase::Literal(l) => add_leaf!("{}", l),
+            ConditionBase::Field(c) => c.populate(parent),
+            ConditionBase::Literal(l) => parent.add_leaf(format!("{}", l).as_str()),
             ConditionBase::LiteralList(l) => {
-                add_branch!("()");
+                let mut branch = parent.add_branch("()");
                 for lit in l.iter() {
-                    add_leaf!("{}", lit);
+                    parent.add_leaf(format!("{}", lit).as_str());
                 }
+                branch.release();
             }
-            ConditionBase::NestedSelect(s) => s.populate(),
+            ConditionBase::NestedSelect(s) => s.populate(parent),
         }
     }
 }

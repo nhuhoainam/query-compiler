@@ -1,6 +1,8 @@
 use std::fmt;
 
 
+use debug_tree::TreeBuilder;
+
 use crate::common::TreeNode;
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
@@ -11,13 +13,14 @@ pub struct Table {
 }
 
 impl TreeNode for Table {
-    fn populate(&self) {
+    fn populate(&self, parent: &TreeBuilder) {
         match self.alias {
             Some(ref alias) => {
-                add_branch!("{}", alias);
-                add_leaf!("{}", self.name);
+                let mut branch = parent.add_branch(format!("{}", alias).as_str());
+                parent.add_leaf(format!("{}", self.name).as_str());
+                branch.release();
             }
-            None => add_leaf!("{}", self.name),
+            None => parent.add_leaf(format!("{}", self.name).as_str()),
         }
     }
 }

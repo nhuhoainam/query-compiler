@@ -1,3 +1,4 @@
+use debug_tree::TreeBuilder;
 use nom::{
     branch::alt,
     bytes::complete::{is_not, tag, tag_no_case, take, take_while1},
@@ -16,12 +17,12 @@ use crate::{
     arithmetic::ArithmeticExpression, column::{Column, FunctionExpression, FunctionArgument, FunctionArguments}, keywords::sql_keywords, table::Table,
 };
 use std::{
-    fmt,
+    fmt::{self},
     str::{self, FromStr},
 };
 
 pub trait TreeNode {
-    fn populate(&self);
+    fn populate(&self, parent: &TreeBuilder);
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
@@ -33,14 +34,14 @@ pub enum FieldDefinitionExpression {
 }
 
 impl TreeNode for FieldDefinitionExpression {
-    fn populate(&self) {
+    fn populate(&self, parent: &TreeBuilder) {
         match self {
-            FieldDefinitionExpression::All => add_leaf!("*"),
+            FieldDefinitionExpression::All => parent.add_leaf("*"),
             FieldDefinitionExpression::AllFromTable(ref table) => {
-                add_leaf!("{}.{}", table.name, "*")
+                parent.add_leaf(format!("{}.{}", table.name, "*").as_str())
             }
-            FieldDefinitionExpression::Column(ref col) => col.populate(),
-            FieldDefinitionExpression::FieldValue(ref fv) => fv.populate(),
+            FieldDefinitionExpression::Column(ref col) => col.populate(parent),
+            FieldDefinitionExpression::FieldValue(ref fv) => fv.populate(parent),
         };
     }
 }
@@ -52,10 +53,10 @@ pub enum FieldValueExpression {
 }
 
 impl TreeNode for FieldValueExpression {
-    fn populate(&self) {
+    fn populate(&self, parent: &TreeBuilder) {
         match self {
-            FieldValueExpression::Arithmetic(ref ari) => ari.populate(),
-            FieldValueExpression::Literal(ref lit) => lit.populate(),
+            FieldValueExpression::Arithmetic(ref ari) => ari.populate(parent),
+            FieldValueExpression::Literal(ref lit) => lit.populate(parent),
         }
     }
 }
@@ -108,11 +109,12 @@ pub struct LiteralExpression {
 }
 
 impl TreeNode for LiteralExpression {
-    fn populate(&self) {
+    fn populate(&self, parent: &TreeBuilder) {
         match self.alias {
             Some(ref alias) => {
-                add_branch!("{}", alias);
-                add_leaf!("{}", self.value)
+                let mut branch = parent.add_branch(format!("{}", alias).as_str());
+                parent.add_leaf(format!("{}", self.value).as_str());
+                branch.release()
             }
             None => add_leaf!("{}", self.value),
         }

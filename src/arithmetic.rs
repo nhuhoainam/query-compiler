@@ -1,5 +1,6 @@
 use std::fmt::{self, Formatter};
 
+use debug_tree::TreeBuilder;
 use nom::{
     branch::alt,
     bytes::complete::tag,
@@ -53,13 +54,13 @@ pub struct ArithmeticExpression {
 }
 
 impl TreeNode for ArithmeticExpression {
-    fn populate(&self) {
+    fn populate(&self, parent: &TreeBuilder) {
         match self.alias {
             Some(ref alias) => {
-                add_branch!("{}", alias);
-                add_leaf!("{}", self.ari);
+                parent.add_branch(format!("{}", alias).as_str());
+                parent.add_leaf(format!("{}", self.ari).as_str());
             }
-            None => add_leaf!("{}", self.ari),
+            None => parent.add_leaf(format!("{}", self.ari).as_str()),
         }
     }
 }

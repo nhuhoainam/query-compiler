@@ -1,5 +1,7 @@
 use std::fmt;
 
+use debug_tree::TreeBuilder;
+
 use crate::{common::TreeNode, keywords::escape_if_keyword};
 
 pub type FunctionArgument = Column;
@@ -72,33 +74,49 @@ pub struct Column {
 }
 
 impl TreeNode for Column {
-    fn populate(&self) {
+    fn populate(&self, parent: &TreeBuilder) {
         match self.alias {
             Some(ref alias) => match self.function {
                 Some(ref fnt) => {
-                    add_branch!("{}", escape_if_keyword(alias));
-                    add_leaf!("{}", fnt)
+                    let mut branch = parent.add_branch(format!("{}", escape_if_keyword(alias)).as_str());
+                    parent.add_leaf(format!("{}", fnt).as_str());
+                    branch.release();
                 }
                 None => {
-                    add_branch!("{}", escape_if_keyword(alias));
-                    add_leaf!(
-                        "{}",
-                        if let Some(ref table) = self.table {
-                            format!("{}.{}", escape_if_keyword(table), escape_if_keyword(&self.name))
-                        } else {
-                            escape_if_keyword(&self.name)
-                        },
+                    let mut branch = parent.add_branch(format!("{}", escape_if_keyword(alias)).as_str());
+                    parent.add_leaf(
+                        format!(
+                            "{}",
+                            if let Some(ref table) = self.table {
+                                format!(
+                                    "{}.{}",
+                                    escape_if_keyword(table),
+                                    escape_if_keyword(&self.name)
+                                )
+                            } else {
+                                escape_if_keyword(&self.name)
+                            }
+                        )
+                        .as_str(),
                     );
+                    branch.release();
                 }
             },
-            None => add_leaf!(
-                "{}",
-                if let Some(ref table) = self.table {
-                    format!("{}.{}", escape_if_keyword(table), escape_if_keyword(&self.name))
-                } else {
-                    escape_if_keyword(&self.name)
-                },
-            )
+            None => parent.add_leaf(
+                format!(
+                    "{}",
+                    if let Some(ref table) = self.table {
+                        format!(
+                            "{}.{}",
+                            escape_if_keyword(table),
+                            escape_if_keyword(&self.name)
+                        )
+                    } else {
+                        escape_if_keyword(&self.name)
+                    }
+                )
+                .as_str(),
+            ),
         }
     }
 }

@@ -1,6 +1,6 @@
 use std::fs;
 
-use debug_tree::{defer_print, defer_write};
+use debug_tree::TreeBuilder;
 use query_compiler::{select::select_statement, common::TreeNode};
 
 fn main() {
@@ -8,10 +8,11 @@ fn main() {
     // let (_, res) = literal_expression(b"\'sth\' AS sth_else").unwrap();
     let input = fs::read_to_string("input.txt").unwrap();
     let res = select_statement(input.as_bytes());
+    let tree = TreeBuilder::new();
     match res {
-        Ok(out) => out.1.populate(),
+        Ok(out) => out.1.populate(&tree),
         Err(e) => print!("{:?}", e),
     }
-    defer_write!("output.txt");
+    tree.write("output.txt").ok();
     // print!("{:?}", res);
 }

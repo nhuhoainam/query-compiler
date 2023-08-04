@@ -1,5 +1,6 @@
 use std::fmt;
 
+use debug_tree::TreeBuilder;
 use nom::{
     branch::alt,
     bytes::complete::{tag, tag_no_case},
@@ -25,10 +26,11 @@ pub struct  JoinClause {
 }
 
 impl TreeNode for JoinClause {
-    fn populate(&self) {
-        add_branch!("{}", self.operator);
-        self.right.populate();
-        self.constraint.populate();
+    fn populate(&self, parent: &TreeBuilder) {
+        let mut branch = parent.add_branch(format!("{}", self.operator).as_str());
+        self.right.populate(parent);
+        self.constraint.populate(parent);
+        branch.release();
     }
 }
 
@@ -43,25 +45,26 @@ pub enum JoinRightHand {
 }
 
 impl TreeNode for JoinRightHand {
-    fn populate(&self) {
+    fn populate(&self, parent: &TreeBuilder) {
         match self {
-            JoinRightHand::Table(ref t) => t.populate(),
+            JoinRightHand::Table(ref t) => t.populate(parent),
             JoinRightHand::Tables(ref t) => {
                 for table in t.iter() {
-                    table.populate();
+                    table.populate(parent);
                 }
             }
             JoinRightHand::NestedSelect(ref s, ref a) => {
                 match a {
                     Some(ref a) => {
-                        add_branch!("{}", a);
-                        s.populate();
+                        let mut branch = parent.add_branch(format!("{}", a).as_str());
+                        s.populate(parent);
+                        branch.release();
                     }
-                    None => s.populate(),
+                    None => s.populate(parent),
                 }
             }
             JoinRightHand::NestedJoin(ref j) => {
-                j.populate();
+                j.populate(parent);
             }
         }
     }
@@ -84,13 +87,19 @@ pub enum JoinCondition {
 }
 
 impl TreeNode for JoinCondition {
-    fn populate(&self) {
+    fn populate(&self, parent: &TreeBuilder) {
         match self {
-            JoinCondition::On(ref c) => add_leaf!("{}", c),
+            JoinCondition::On(ref c) => {
+                let mut branch = parent.add_branch("ON");
+                parent.add_leaf(format!("{}", c).as_str());
+                branch.release();
+            },
             JoinCondition::Using(ref c) => {
+                let mut branch = parent.add_branch("USING");
                 for column in c.iter() {
-                    column.populate();
+                    column.populate(parent);
                 }
+                branch.release();
             }
         }
     }

@@ -1,5 +1,6 @@
 use std::fmt;
 
+use debug_tree::TreeBuilder;
 use nom::{
     branch::alt,
     bytes::complete::{tag, tag_no_case},
@@ -11,6 +12,7 @@ use nom::{
 };
 
 use crate::{
+    arithmetic::arithmetic_expression,
     column::Column,
     common::{
         column_identifier, field_list, literal_expression, statement_terminator, table_list,
@@ -19,7 +21,7 @@ use crate::{
     condition::{condition_expr, ConditionExpression},
     join::{join_clause, JoinClause},
     order::{order_by_clause, OrderByClause},
-    table::Table, arithmetic::arithmetic_expression,
+    table::Table,
 };
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
@@ -47,38 +49,46 @@ pub struct SelectStatement {
 }
 
 impl TreeNode for SelectStatement {
-    fn populate(&self) {
-        add_branch!("<Query>");
-        add_branch!("SELECT{}", if self.distinct { " DISTINCT" } else { "" });
+    fn populate(&self, parent: &TreeBuilder) {
+        parent.add_branch("<Query>");
+        parent.enter();
+        let mut branch = parent
+            .add_branch(format!("SELECT{}", if self.distinct { " DISTINCT" } else { "" }).as_str());
         for sel_item in self.sel_list.iter() {
-            sel_item.populate();
+            sel_item.populate(parent);
         }
-        add_branch!("FROM");
+        branch.release();
+        let mut branch = parent.add_branch("FROM");
         for table in self.tables.iter() {
-            table.populate();
+            table.populate(parent);
         }
         for join in self.join.iter() {
-            join.populate();
+            join.populate(parent);
         }
+        branch.release();
         if let Some(ref condition) = self.condition {
-            add_branch!("WHERE");
-            condition.populate();
+            let mut branch = parent.add_branch("WHERE");
+            condition.populate(parent);
+            branch.release();
         }
         if let Some(ref group_by) = self.group_by {
-            add_branch!("GROUP BY");
+            let mut branch = parent.add_branch("GROUP BY");
             for col in group_by.columns.iter() {
-                col.populate();
+                col.populate(parent);
             }
+            branch.release();
             if let Some(ref having) = group_by.having {
-                add_branch!("HAVING");
-                having.populate();
+                let mut branch = parent.add_branch("HAVING");
+                having.populate(parent);
+                branch.release();
             }
         }
         if let Some(ref order_by) = self.order_by {
-            add_branch!("ORDER BY");
+            let mut branch = parent.add_branch("ORDER BY");
             for col in order_by.columns.iter() {
                 add_leaf!("{} {}", col.0.name, col.1);
             }
+            branch.release();
         }
     }
 }
