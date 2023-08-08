@@ -1,7 +1,7 @@
 use std::fs;
 
 use debug_tree::TreeBuilder;
-use query_compiler::{select::select_statement, common::TreeNode};
+use query_compiler::{compound_select::compound_selection, common::TreeNode, select::select_statement};
 
 fn main() {
     // let (_, res) = join_clause(b"inner join foo on foo.a = bar.a AND foo.a <> 1").unwrap();

@@ -2,7 +2,7 @@ use std::fmt;
 
 use nom::{IResult, branch::alt, combinator::{map, opt}, sequence::{preceded, delimited, tuple}, bytes::complete::{tag_no_case, tag}, character::complete::{multispace1, multispace0}, multi::many1};
 
-use crate::{select::{SelectStatement, nested_select_statement}, order::{OrderByClause, order_by_clause}, common::{opt_delimited, statement_terminator}};
+use crate::{select::{SelectStatement, nested_select_statement}, order::{OrderByClause, order_by_clause}, common::{opt_delimited, statement_terminator, TreeNode}};
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Deserialize, Serialize)]
 pub enum CompoundSelectOperator {
@@ -27,6 +27,27 @@ impl fmt::Display for CompoundSelectOperator {
 pub struct CompoundSelectStatement {
     pub selects: Vec<(Option<CompoundSelectOperator>, SelectStatement)>,
     pub order: Option<OrderByClause>,
+}
+
+impl TreeNode for CompoundSelectStatement {
+    fn populate(&self, parent: &debug_tree::TreeBuilder) {
+        let mut branch = parent.add_branch("<Query>");
+        for (ref op, ref sel) in &self.selects {
+            if op.is_some() {
+                let mut branch = parent.add_branch(format!("{}", op.as_ref().unwrap()).as_str());
+                branch.release();
+            }
+            sel.populate(parent);
+        }
+        if let Some(ref order_by) = self.order {
+            let mut branch = parent.add_branch("ORDER BY");
+            for col in order_by.columns.iter() {
+                add_leaf!("{} {}", col.0.name, col.1);
+            }
+            branch.release();
+        }
+        branch.release();
+    }
 }
 
 impl fmt::Display for CompoundSelectStatement {
