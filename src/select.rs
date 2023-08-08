@@ -135,11 +135,11 @@ pub fn field_definition_expression(
             map(arithmetic_expression, |expr| {
                 FieldDefinitionExpression::FieldValue(FieldValueExpression::Arithmetic(expr))
             }),
-            map(column_identifier, |col| {
-                FieldDefinitionExpression::Column(col)
-            }),
             map(literal_expression, |lit| {
                 FieldDefinitionExpression::FieldValue(FieldValueExpression::Literal(lit))
+            }),
+            map(column_identifier, |col| {
+                FieldDefinitionExpression::Column(col)
             }),
         )),
         opt(ws_sep_comma),
