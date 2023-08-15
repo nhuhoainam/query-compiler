@@ -1,5 +1,9 @@
 use crate::column::Column;
 
+pub trait LogicalPlan {
+    fn schema(&self) -> Schema;
+}
+
 pub struct Selection {
     pub relation: Relation,
     pub condition: RelationalCondition,

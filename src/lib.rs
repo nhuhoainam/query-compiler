@@ -21,5 +21,5 @@ pub mod keywords;
 pub mod order;
 pub mod table;
 pub mod tests;
-pub mod relational_algebra;
+pub mod logical_plan;
 pub mod select;
