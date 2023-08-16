@@ -19,7 +19,7 @@ use crate::{
 };
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
-pub struct  JoinClause {
+pub struct JoinClause {
     pub operator: JoinOperator,
     pub right: JoinRightHand,
     pub constraint: JoinCondition,

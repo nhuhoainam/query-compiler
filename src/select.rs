@@ -25,13 +25,6 @@ use crate::{
 };
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
-pub enum FromItem {
-    Table(Table),
-    NestedSelect(SelectStatement),
-    Join(JoinClause),
-}
-
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub struct GroupByClause {
     pub columns: Vec<Column>,
     pub having: Option<ConditionExpression>,
