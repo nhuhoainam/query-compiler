@@ -1,7 +1,7 @@
-use crate::column::Column;
+use crate::{column::Column, select::{SelectStatement, GroupByClause}, common::FieldDefinitionExpression, table::Table, join::JoinClause, condition::ConditionExpression, order::OrderByClause};
 
-pub trait LogicalPlan {
-    fn schema(&self) -> Schema;
+pub struct Disticnt {
+    pub relation: Relation,
 }
 
 pub struct Selection {
@@ -17,6 +17,20 @@ pub struct Projection {
 pub struct Rename {
     pub relation: Relation,
     pub columns: Vec<Column>,
+}
+
+pub struct Grouping {
+    pub relation: Relation,
+    pub columns: Vec<Column>,
+    pub condition: RelationalCondition,
+}
+
+pub enum Aggregation {
+    Count(Column),
+    Sum(Column),
+    Average(Column),
+    Min(Column),
+    Max(Column),
 }
 
 pub enum Relation {
@@ -52,4 +66,34 @@ pub enum ComparisonOperator {
     LessThanOrEqual,
     GreaterThan,
     GreaterThanOrEqual,
+}
+
+impl From<SelectStatement> for Relation {
+    fn from(value: SelectStatement) -> Self {
+        todo!()
+    }
+}
+
+impl From<Vec<FieldDefinitionExpression>> for Relation {
+    fn from(value: Vec<FieldDefinitionExpression>) -> Self {
+        todo!()
+    }
+}
+    
+impl From<(Vec<Table>, Vec<JoinClause>, Option<ConditionExpression>)> for Relation {
+    fn from(value: (Vec<Table>, Vec<JoinClause>, Option<ConditionExpression>)) -> Self {
+        todo!()
+    }
+}
+
+impl From<GroupByClause> for Relation {
+    fn from(value: GroupByClause) -> Self {
+        todo!()
+    }
+}
+
+impl From<OrderByClause> for Relation {
+    fn from(value: OrderByClause) -> Self {
+        todo!()
+    }
 }
