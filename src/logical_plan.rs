@@ -1,41 +1,53 @@
+use core::fmt;
+
 use crate::{
     column::Column,
-    common::{FieldDefinitionExpression, FieldValueExpression},
-    condition::ConditionExpression,
-    join::{JoinClause, JoinCondition, JoinOperator},
+    common::{FieldDefinitionExpression, FieldValueExpression, Operator},
+    condition::{ConditionBase, ConditionExpression, ConditionTree},
+    join::{JoinClause, JoinCondition, JoinOperator, JoinRightHand},
     order::OrderByClause,
     select::{GroupByClause, SelectStatement},
     table::Table,
 };
 
+pub trait Schema {
+    fn schema(&self) -> Vec<(String, Vec<Column>)>;
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub struct Disticnt {
     pub relation: Relation,
 }
 
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub struct Selection {
     pub relation: Relation,
-    pub condition: RelationalCondition,
+    pub condition: Vec<RelationalCondition>,
 }
 
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub struct Projection {
     pub relation: Relation,
     pub values: Vec<ProjectionValue>,
 }
 
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub enum ProjectionValue {
     Column(Column),
     Expression(FieldValueExpression),
 }
 
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub struct Rename {
     pub relation: Relation,
     pub alias: String,
 }
 
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub struct Grouping {
     pub relation: Relation,
     pub columns: Vec<Column>,
-    pub condition: RelationalCondition,
+    pub condition: Vec<RelationalCondition>,
 }
 
 pub enum Aggregation {
@@ -46,8 +58,15 @@ pub enum Aggregation {
     Max(Column),
 }
 
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+pub struct RelationBase {
+    pub name: String,
+    pub columns: Vec<Column>,
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub enum Relation {
-    Table(Table),
+    Base(RelationBase),
     Selection(Box<Selection>),
     Projection(Box<Projection>),
     Rename(Box<Rename>),
@@ -62,20 +81,60 @@ pub enum Relation {
     Intersection(Box<Relation>, Box<Relation>),
 }
 
-pub enum RelationalCondition {
-    Comparison(Column, Column, ComparisonOperator),
-    Conjunction(Box<RelationalCondition>, Box<RelationalCondition>),
-    Disjunction(Box<RelationalCondition>, Box<RelationalCondition>),
-    Negation(Box<RelationalCondition>),
+impl fmt::Display for Relation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self {
+            Relation::Base(_) => todo!(),
+            Relation::Selection(_) => todo!(),
+            Relation::Projection(_) => todo!(),
+            Relation::Rename(_) => todo!(),
+            Relation::Join(_, _, _, _) => todo!(),
+            Relation::Union(_, _) => todo!(),
+            Relation::Difference(_, _) => todo!(),
+            Relation::Intersection(_, _) => todo!(),
+        }
+    }
 }
 
-pub enum ComparisonOperator {
-    Equal,
-    NotEqual,
-    LessThan,
-    LessThanOrEqual,
-    GreaterThan,
-    GreaterThanOrEqual,
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+pub struct RelationalCondition {
+    pub condition: ConditionExpression,
+    pub relation: Box<Relation>,
+}
+
+impl Schema for Relation {
+    fn schema(&self) -> Vec<(String, Vec<Column>)> {
+        match self {
+            Relation::Base(base) => vec![(base.name.clone(), base.columns.clone())],
+            Relation::Selection(selection) => selection.relation.schema(),
+            Relation::Projection(projection) => projection.relation.schema(),
+            Relation::Rename(rename) => rename.relation.schema(),
+            Relation::Join(left, right, _, _) => {
+                let mut left = left.schema();
+                let mut right = right.schema();
+                left.append(&mut right);
+                left
+            }
+            Relation::Union(left, right) => {
+                let mut left = left.schema();
+                let mut right = right.schema();
+                left.append(&mut right);
+                left
+            }
+            Relation::Difference(left, right) => {
+                let mut left = left.schema();
+                let mut right = right.schema();
+                left.append(&mut right);
+                left
+            }
+            Relation::Intersection(left, right) => {
+                let mut left = left.schema();
+                let mut right = right.schema();
+                left.append(&mut right);
+                left
+            }
+        }
+    }
 }
 
 impl From<SelectStatement> for Relation {
@@ -114,55 +173,90 @@ impl From<(Vec<FieldDefinitionExpression>, Relation)> for Relation {
                 }))
             }
         }
-        // let value = value.into_iter().fold(, f)
     }
 }
 
-impl From<JoinCondition> for RelationalCondition {
-    fn from(value: JoinCondition) -> Self {
-        todo!()
+impl From<(JoinCondition, Relation)> for RelationalCondition {
+    fn from(value: (JoinCondition, Relation)) -> Self {
+        match value.0 {
+            JoinCondition::On(con) => RelationalCondition {
+                condition: con,
+                relation: Box::new(value.1.clone()),
+            },
+            JoinCondition::Using(cols) => {
+                let mut conds: Vec<ConditionExpression> = vec![];
+                cols.into_iter().for_each(|col| {
+                    conds.push(ConditionExpression::ComparisonOp(ConditionTree {
+                        operator: Operator::Equal,
+                        left: Box::new(ConditionExpression::Base(ConditionBase::Field(
+                            col.clone(),
+                        ))),
+                        right: Box::new(ConditionExpression::Base(ConditionBase::Field(col))),
+                    }))
+                });
+                let first_cond = conds[0].clone();
+                conds.into_iter().fold(
+                    RelationalCondition {
+                        condition: first_cond,
+                        relation: Box::new(value.1.clone()),
+                    },
+                    |acc, x| RelationalCondition {
+                        condition: ConditionExpression::LogicalOp(ConditionTree {
+                            operator: Operator::And,
+                            left: Box::new(acc.condition),
+                            right: Box::new(x),
+                        }),
+                        relation: Box::new(value.1.clone()),
+                    },
+                )
+            }
+        }
     }
 }
 
-impl From<ConditionExpression> for RelationalCondition {
-    fn from(value: ConditionExpression) -> Self {
-        todo!()
-    }
-}
-
-impl From<(Vec<Table>, Vec<JoinClause>, Option<ConditionExpression>)> for Relation {
-    fn from(value: (Vec<Table>, Vec<JoinClause>, Option<ConditionExpression>)) -> Self {
+impl From<(Vec<Table>, Vec<JoinClause>, Option<RelationalCondition>)> for Relation {
+    fn from(value: (Vec<Table>, Vec<JoinClause>, Option<RelationalCondition>)) -> Self {
         let first = value.0[0].clone();
-        let from = value
-            .0
-            .into_iter()
-            .fold(Relation::Table(first), |acc, table| {
+        let from = value.0.into_iter().fold(
+            Relation::Base(RelationBase {
+                name: first.name,
+                columns: first.metadata.unwrap(), // TODO: handle None
+            }),
+            |acc, table| {
                 Relation::Join(
                     Box::new(acc),
-                    Box::new(Relation::Table(table)),
+                    Box::new(Relation::Base(RelationBase {
+                        name: table.name,
+                        columns: table.metadata.unwrap(), // TODO: handle None
+                    })),
                     JoinOperator::Cross,
                     None,
                 )
-            });
+            },
+        );
 
         let join = value.1.into_iter().fold(from, |acc, x| {
             let right_hand = match x.right {
-                crate::join::JoinRightHand::Table(ref t) => Relation::Table(t.clone()),
-                crate::join::JoinRightHand::Tables(ref ts) => todo!(),
-                crate::join::JoinRightHand::NestedSelect(_, _) => todo!(),
-                crate::join::JoinRightHand::NestedJoin(_) => todo!(),
+                JoinRightHand::Table(ref t) => Relation::Base(RelationBase {
+                    name: t.name.clone(),
+                    columns: t.metadata.clone().unwrap(), // TODO: handle None
+                }),
+                JoinRightHand::Tables(ref ts) => todo!(),
+                JoinRightHand::NestedSelect(_, _) => todo!(),
+                JoinRightHand::NestedJoin(_) => todo!(),
             };
+            let join_con = (x.constraint, right_hand.clone()).into();
             Relation::Join(
                 Box::new(acc),
                 Box::new(right_hand),
                 x.operator,
-                Some(x.constraint.into()),
+                Some(join_con),
             )
         });
 
         Relation::Selection(Box::new(Selection {
             relation: join,
-            condition: value.2.unwrap().into(),
+            condition: vec![value.2.unwrap().into()],
         }))
     }
 }

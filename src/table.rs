@@ -3,13 +3,14 @@ use std::fmt;
 
 use debug_tree::TreeBuilder;
 
-use crate::common::TreeNode;
+use crate::{common::TreeNode, column::Column};
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub struct Table {
     pub name: String,
     pub alias: Option<String>,
     pub schema: Option<String>,
+    pub metadata: Option<Vec<Column>>,
 }
 
 impl TreeNode for Table {
@@ -31,6 +32,7 @@ impl From<String> for Table {
             name,
             alias: None,
             schema: None,
+            metadata: None,
         }
     }
 }
@@ -51,6 +53,7 @@ impl<'a> From<&'a str> for Table {
             name: String::from(t),
             alias: None,
             schema: None,
+            metadata: None,
         }
     }
 }
@@ -61,6 +64,7 @@ impl<'a> From<(&'a str, &'a str)> for Table {
             name: String::from(t.1),
             alias: None,
             schema: Some(String::from(t.0)),
+            metadata: None,
         }
     }
 }

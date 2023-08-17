@@ -394,6 +394,7 @@ pub fn table_reference(i: &[u8]) -> IResult<&[u8], Table> {
             None => None,
         },
         schema: None,
+        metadata: None,
     })(i)
 }
 
