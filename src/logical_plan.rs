@@ -10,7 +10,7 @@ use crate::{
     table::Table,
 };
 
-pub trait Schema {
+pub trait LogicalPlan {
     fn schema(&self) -> Vec<(String, Vec<Column>)>;
 }
 
@@ -28,8 +28,10 @@ pub struct Selection {
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub struct Projection {
     pub relation: Relation,
-    pub values: Vec<ProjectionValue>,
+    pub values: ProjectionList,
 }
+
+pub type ProjectionList = Vec<ProjectionValue>;
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub enum ProjectionValue {
@@ -102,7 +104,7 @@ pub struct RelationalCondition {
     pub relation: Box<Relation>,
 }
 
-impl Schema for Relation {
+impl LogicalPlan for Relation {
     fn schema(&self) -> Vec<(String, Vec<Column>)> {
         match self {
             Relation::Base(base) => vec![(base.name.clone(), base.columns.clone())],
@@ -143,30 +145,34 @@ impl From<SelectStatement> for Relation {
     }
 }
 
-impl From<FieldDefinitionExpression> for ProjectionValue {
-    fn from(value: FieldDefinitionExpression) -> Self {
-        match value {
-            FieldDefinitionExpression::All => todo!(),
-            FieldDefinitionExpression::AllFromTable(_) => todo!(),
-            FieldDefinitionExpression::Column(col) => ProjectionValue::Column(col),
-            FieldDefinitionExpression::FieldValue(val) => match val {
-                FieldValueExpression::Arithmetic(ari) => {
-                    ProjectionValue::Expression(FieldValueExpression::Arithmetic(ari))
-                }
-                FieldValueExpression::Literal(lit) => {
-                    ProjectionValue::Expression(FieldValueExpression::Literal(lit))
-                }
-            },
-        }
-    }
-}
-
 impl From<(Vec<FieldDefinitionExpression>, Relation)> for Relation {
     fn from(value: (Vec<FieldDefinitionExpression>, Relation)) -> Self {
         match value.0.len() {
             0 => value.1,
             _ => {
-                let values = value.0.into_iter().map(|x| x.into()).collect();
+                let mut values: Vec<ProjectionValue> = vec![];
+                value.0.into_iter().for_each(|x| match x {
+                    FieldDefinitionExpression::All => (),
+                    FieldDefinitionExpression::AllFromTable(t) => t
+                        .metadata
+                        .unwrap()
+                        .into_iter()
+                        .for_each(|x| values.push(ProjectionValue::Column(x))),
+                    FieldDefinitionExpression::Column(col) => {
+                        values.push(ProjectionValue::Column(col))
+                    }
+                    FieldDefinitionExpression::FieldValue(val) => {
+                        let f = match val {
+                            FieldValueExpression::Arithmetic(ari) => {
+                                ProjectionValue::Expression(FieldValueExpression::Arithmetic(ari))
+                            }
+                            FieldValueExpression::Literal(lit) => {
+                                ProjectionValue::Expression(FieldValueExpression::Literal(lit))
+                            }
+                        };
+                        values.push(f)
+                    }
+                });
                 Relation::Projection(Box::new(Projection {
                     relation: value.1,
                     values,
@@ -237,13 +243,32 @@ impl From<(Vec<Table>, Vec<JoinClause>, Option<RelationalCondition>)> for Relati
 
         let join = value.1.into_iter().fold(from, |acc, x| {
             let right_hand = match x.right {
-                JoinRightHand::Table(ref t) => Relation::Base(RelationBase {
+                JoinRightHand::Table(t) => Relation::Base(RelationBase {
                     name: t.name.clone(),
                     columns: t.metadata.clone().unwrap(), // TODO: handle None
                 }),
-                JoinRightHand::Tables(ref ts) => todo!(),
+                JoinRightHand::Tables(ts) => {
+                    let first = ts[0].clone();
+                    ts.into_iter().fold(
+                        Relation::Base(RelationBase {
+                            name: first.name,
+                            columns: first.metadata.unwrap(), // TODO: handle None
+                        }),
+                        |acc, table| {
+                            Relation::Join(
+                                Box::new(acc),
+                                Box::new(Relation::Base(RelationBase {
+                                    name: table.name,
+                                    columns: table.metadata.unwrap(), // TODO: handle None
+                                })),
+                                JoinOperator::Cross,
+                                None,
+                            )
+                        },
+                    )
+                }
                 JoinRightHand::NestedSelect(_, _) => todo!(),
-                JoinRightHand::NestedJoin(_) => todo!(),
+                JoinRightHand::NestedJoin(inner_join) => todo!(),
             };
             let join_con = (x.constraint, right_hand.clone()).into();
             Relation::Join(
