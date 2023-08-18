@@ -5,7 +5,7 @@ use crate::{
     common::{FieldDefinitionExpression, FieldValueExpression, Operator},
     condition::{ConditionBase, ConditionExpression, ConditionTree},
     join::{JoinClause, JoinCondition, JoinOperator, JoinRightHand},
-    order::OrderByClause,
+    order::{OrderByClause, OrderType},
     select::{GroupByClause, SelectStatement},
     table::Table,
 };
@@ -22,7 +22,7 @@ pub struct Disticnt {
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub struct Selection {
     pub relation: Relation,
-    pub condition: Vec<RelationalCondition>,
+    pub condition: RelationalCondition,
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
@@ -49,15 +49,13 @@ pub struct Rename {
 pub struct Grouping {
     pub relation: Relation,
     pub columns: Vec<Column>,
-    pub condition: Vec<RelationalCondition>,
+    pub condition: Option<RelationalCondition>,
 }
 
-pub enum Aggregation {
-    Count(Column),
-    Sum(Column),
-    Average(Column),
-    Min(Column),
-    Max(Column),
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+pub struct Order {
+    pub relation: Relation,
+    pub columns: Vec<(Column, OrderType)>,
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
@@ -78,6 +76,9 @@ pub enum Relation {
         JoinOperator,
         Option<RelationalCondition>,
     ),
+    Grouping(Box<Grouping>),
+    Order(Box<Order>),
+    Disticnt(Box<Disticnt>),
     Union(Box<Relation>, Box<Relation>),
     Difference(Box<Relation>, Box<Relation>),
     Intersection(Box<Relation>, Box<Relation>),
@@ -91,9 +92,12 @@ impl fmt::Display for Relation {
             Relation::Projection(_) => todo!(),
             Relation::Rename(_) => todo!(),
             Relation::Join(_, _, _, _) => todo!(),
+            Relation::Grouping(_) => todo!(),
+            Relation::Disticnt(_) => todo!(),
             Relation::Union(_, _) => todo!(),
             Relation::Difference(_, _) => todo!(),
             Relation::Intersection(_, _) => todo!(),
+            Relation::Order(_) => todo!(),
         }
     }
 }
@@ -135,13 +139,42 @@ impl LogicalPlan for Relation {
                 left.append(&mut right);
                 left
             }
+            Relation::Grouping(group) => group.relation.schema(),
+            Relation::Disticnt(rel) => rel.relation.schema(),
+            Relation::Order(ord) => ord.relation.schema(),
         }
     }
 }
 
 impl From<SelectStatement> for Relation {
     fn from(value: SelectStatement) -> Self {
-        todo!()
+        let from: Relation = (
+            value.tables,
+            value.join,
+            match value.condition {
+                Some(condition) => Some(condition.into()),
+                None => None,
+            },
+        )
+            .into();
+        let projection = (value.sel_list, from.clone()).into();
+        let projection: Projection = match projection {
+            Relation::Projection(projection) => *projection,
+            _ => panic!("projection error"),
+        };
+        let group: Relation = match value.group_by {
+            Some(group) => (group, projection, from).into(),
+            None => from,
+        };
+        let order = match value.order_by {
+            Some(order) => (order, group).into(),
+            None => group,
+        };
+        let distinct = match value.distinct {
+            true => Relation::Disticnt(Box::new(Disticnt { relation: order })),
+            false => order,
+        };
+        distinct
     }
 }
 
@@ -220,8 +253,8 @@ impl From<(JoinCondition, Relation)> for RelationalCondition {
     }
 }
 
-impl From<(Vec<Table>, Vec<JoinClause>, Option<RelationalCondition>)> for Relation {
-    fn from(value: (Vec<Table>, Vec<JoinClause>, Option<RelationalCondition>)) -> Self {
+impl From<(Vec<Table>, Vec<JoinClause>, Option<ConditionExpression>)> for Relation {
+    fn from(value: (Vec<Table>, Vec<JoinClause>, Option<ConditionExpression>)) -> Self {
         let first = value.0[0].clone();
         let from = value.0.into_iter().fold(
             Relation::Base(RelationBase {
@@ -280,20 +313,49 @@ impl From<(Vec<Table>, Vec<JoinClause>, Option<RelationalCondition>)> for Relati
         });
 
         Relation::Selection(Box::new(Selection {
-            relation: join,
-            condition: vec![value.2.unwrap().into()],
+            relation: join.clone(),
+            condition: RelationalCondition {
+                condition: value.2.unwrap(),
+                relation: Box::new(join),
+            },
         }))
     }
 }
 
-impl From<GroupByClause> for Relation {
-    fn from(value: GroupByClause) -> Self {
-        todo!()
+impl From<(GroupByClause, Projection, Relation)> for Relation {
+    fn from(value: (GroupByClause, Projection, Relation)) -> Self {
+        let mut columns = value.0.columns.clone();
+        value.1.values.into_iter().for_each(|x| match x {
+            ProjectionValue::Column(col) => columns.push(col),
+            ProjectionValue::Expression(_) => (),
+        });
+        Relation::Grouping(Box::new(Grouping {
+            relation: value.2.clone(),
+            columns,
+            condition: match value.0.having {
+                Some(con) => Some(RelationalCondition {
+                    condition: con,
+                    relation: Box::new(value.2),
+                }),
+                None => None,
+            },
+        }))
     }
 }
 
-impl From<OrderByClause> for Relation {
-    fn from(value: OrderByClause) -> Self {
-        todo!()
+impl From<(OrderByClause, Relation)> for Relation {
+    fn from(value: (OrderByClause, Relation)) -> Self {
+        Relation::Order(Box::new(Order {
+            relation: value.1,
+            columns: value.0.columns,
+        }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_simple_select() {
+        
     }
 }
