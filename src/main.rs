@@ -20,9 +20,17 @@ fn main() {
     // tree.write("output.txt").ok();
     let sql = b"SELECT column1 FROM table";
     let parse_tree = select_statement(sql).unwrap().1;
+    let schema = get_schema();
+    let res: Relation = (parse_tree, schema).into();
+    let tree = TreeBuilder::new();
+    res.populate(&tree);
+    tree.write("output.txt").ok();
+}
+
+fn get_schema() -> Schema {
     let mut schema: Schema = BTreeMap::new();
     schema.insert(
-        "table".to_string(),
+        "table1".to_string(),
         vec![
             Column {
                 name: "column1".to_string(),
@@ -38,6 +46,22 @@ fn main() {
             },
         ],
     );
-    let res: Relation = (parse_tree, schema).into();
-    print!("{:#?}", res);
+    schema.insert(
+        "table2".to_string(),
+        vec![
+            Column {
+                name: "column1".to_string(),
+                alias: None,
+                table: None,
+                function: None,
+            },
+            Column {
+                name: "column2".to_string(),
+                alias: None,
+                table: None,
+                function: None,
+            },
+        ],
+    );
+    schema
 }

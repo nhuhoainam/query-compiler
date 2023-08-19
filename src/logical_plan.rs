@@ -1,9 +1,11 @@
 use core::fmt;
 use std::collections::BTreeMap;
 
+use debug_tree::TreeBuilder;
+
 use crate::{
     column::Column,
-    common::{FieldDefinitionExpression, FieldValueExpression, Operator},
+    common::{FieldDefinitionExpression, FieldValueExpression, Operator, TreeNode},
     condition::{ConditionBase, ConditionExpression, ConditionTree},
     join::{JoinClause, JoinCondition, JoinOperator, JoinRightHand},
     order::{OrderByClause, OrderType},
@@ -373,6 +375,116 @@ impl From<(Vec<Table>, Vec<JoinClause>, Option<ConditionExpression>)> for Relati
     }
 }
 
+impl TreeNode for RelationalCondition {
+    fn populate(&self, parent: &TreeBuilder) {
+        self.condition.populate(parent)
+    }
+}
+
+impl TreeNode for ProjectionValue {
+    fn populate(&self, parent: &TreeBuilder) {
+        match &self {
+            ProjectionValue::Column(col) => col.populate(parent),
+            ProjectionValue::Expression(exp) => exp.populate(parent),
+        }
+    }
+}
+
+impl fmt::Display for ProjectionValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self {
+            ProjectionValue::Column(col) => write!(f, "{}", col.name),
+            ProjectionValue::Expression(exp) => write!(f, "{}", exp),
+        }
+    }
+}
+
+impl TreeNode for Relation {
+    fn populate(&self, parent: &TreeBuilder) {
+        match &self {
+            Relation::Base(base) => {
+                let mut branch = parent.add_branch(base.name.as_str());
+                for col in base.columns.iter() {
+                    col.populate(parent);
+                }
+                branch.release();
+            }
+            Relation::Selection(selection) => {
+                let sel = format!("SELECTION {}", selection.condition.condition);
+                selection.relation.populate(parent);
+                let mut branch = parent.add_branch(&sel);
+                branch.release();
+            }
+            Relation::Projection(projection) => {
+                let mut proj = "PROJECTION ".to_string();
+                for val in projection.values.iter() {
+                    proj = proj + &format!("{} ", val);
+                }
+                let mut branch = parent.add_branch(proj.as_str());
+                projection.relation.populate(parent);
+                branch.release();
+            }
+            Relation::Rename(rename) => {
+                let mut branch = parent.add_branch(format!("RENAME {}", rename.alias).as_str());
+                rename.relation.populate(parent);
+                branch.release();
+            }
+            Relation::Join(left, right, op, con) => {
+                let mut join = format!("{} JOIN ", op);
+                if let Some(con) = con {
+                    join = join + &con.condition.to_string();
+                }
+                let mut branch = parent.add_branch(&join);
+                left.populate(parent);
+                right.populate(parent);
+                branch.release();
+            }
+            Relation::Grouping(group) => {
+                let mut branch = parent.add_branch("GROUPING");
+                group.relation.populate(parent);
+                for col in group.columns.iter() {
+                    col.populate(parent);
+                }
+                if let Some(con) = &group.condition {
+                    con.populate(parent);
+                }
+                branch.release();
+            }
+            Relation::Disticnt(dist) => {
+                let mut branch = parent.add_branch("DISTINCT");
+                dist.relation.populate(parent);
+                branch.release();
+            }
+            Relation::Union(left, right) => {
+                let mut branch = parent.add_branch("UNION");
+                left.populate(parent);
+                right.populate(parent);
+                branch.release();
+            }
+            Relation::Difference(left, right) => {
+                let mut branch = parent.add_branch("DIFFERENCE");
+                left.populate(parent);
+                right.populate(parent);
+                branch.release();
+            }
+            Relation::Intersection(left, right) => {
+                let mut branch = parent.add_branch("INTERSECTION");
+                left.populate(parent);
+                right.populate(parent);
+                branch.release();
+            }
+            Relation::Order(ord) => {
+                let mut branch = parent.add_branch("ORDER");
+                ord.relation.populate(parent);
+                for col in ord.columns.iter() {
+                    col.0.populate(parent);
+                }
+                branch.release();
+            }
+        }
+    }
+}
+
 impl From<(GroupByClause, Projection, Relation)> for Relation {
     fn from(value: (GroupByClause, Projection, Relation)) -> Self {
         let mut columns = value.0.columns.clone();
@@ -577,6 +689,271 @@ mod tests {
                 },
             })),
             values: vec![
+                ProjectionValue::Column(Column {
+                    name: "column1".to_string(),
+                    alias: None,
+                    table: None,
+                    function: None,
+                }),
+                ProjectionValue::Column(Column {
+                    name: "column2".to_string(),
+                    alias: None,
+                    table: None,
+                    function: None,
+                }),
+            ],
+        }));
+        assert_eq!(logical_plan, expected);
+    }
+
+    #[test]
+    fn test_join() {
+        let sql = b"SELECT * FROM table1, table2";
+        let parse_tree = select_statement(sql).unwrap().1;
+        let schema = get_schema();
+        let logical_plan: Relation = (parse_tree, schema.clone()).into();
+        let expected = Relation::Projection(Box::new(Projection {
+            relation: Relation::Join(
+                Box::new(Relation::Base(RelationBase {
+                    name: "table1".to_string(),
+                    columns: vec![
+                        Column {
+                            name: "column1".to_string(),
+                            alias: None,
+                            table: None,
+                            function: None,
+                        },
+                        Column {
+                            name: "column2".to_string(),
+                            alias: None,
+                            table: None,
+                            function: None,
+                        },
+                    ],
+                })),
+                Box::new(Relation::Base(RelationBase {
+                    name: "table2".to_string(),
+                    columns: vec![
+                        Column {
+                            name: "column1".to_string(),
+                            alias: None,
+                            table: None,
+                            function: None,
+                        },
+                        Column {
+                            name: "column2".to_string(),
+                            alias: None,
+                            table: None,
+                            function: None,
+                        },
+                    ],
+                })),
+                JoinOperator::Cross,
+                None,
+            ),
+            values: vec![
+                ProjectionValue::Column(Column {
+                    name: "column1".to_string(),
+                    alias: None,
+                    table: None,
+                    function: None,
+                }),
+                ProjectionValue::Column(Column {
+                    name: "column2".to_string(),
+                    alias: None,
+                    table: None,
+                    function: None,
+                }),
+                ProjectionValue::Column(Column {
+                    name: "column1".to_string(),
+                    alias: None,
+                    table: None,
+                    function: None,
+                }),
+                ProjectionValue::Column(Column {
+                    name: "column2".to_string(),
+                    alias: None,
+                    table: None,
+                    function: None,
+                }),
+            ],
+        }));
+        assert_eq!(logical_plan, expected);
+
+        let sql = b"SELECT * FROM table1, table2 WHERE table1.column1 = table2.column1";
+        let parse_tree = select_statement(sql).unwrap().1;
+        let logical_plan: Relation = (parse_tree, schema.clone()).into();
+        let expected = Relation::Projection(Box::new(Projection {
+            relation: Relation::Selection(Box::new(Selection {
+                relation: Relation::Join(
+                    Box::new(Relation::Base(RelationBase {
+                        name: "table1".to_string(),
+                        columns: vec![
+                            Column {
+                                name: "column1".to_string(),
+                                alias: None,
+                                table: None,
+                                function: None,
+                            },
+                            Column {
+                                name: "column2".to_string(),
+                                alias: None,
+                                table: None,
+                                function: None,
+                            },
+                        ],
+                    })),
+                    Box::new(Relation::Base(RelationBase {
+                        name: "table2".to_string(),
+                        columns: vec![
+                            Column {
+                                name: "column1".to_string(),
+                                alias: None,
+                                table: None,
+                                function: None,
+                            },
+                            Column {
+                                name: "column2".to_string(),
+                                alias: None,
+                                table: None,
+                                function: None,
+                            },
+                        ],
+                    })),
+                    JoinOperator::Cross,
+                    Some(RelationalCondition {
+                        condition: ConditionExpression::ComparisonOp(ConditionTree {
+                            operator: Operator::Equal,
+                            left: Box::new(ConditionExpression::Base(ConditionBase::Field(
+                                Column {
+                                    name: "column1".to_string(),
+                                    alias: None,
+                                    table: None,
+                                    function: None,
+                                },
+                            ))),
+                            right: Box::new(ConditionExpression::Base(ConditionBase::Field(
+                                Column {
+                                    name: "column1".to_string(),
+                                    alias: None,
+                                    table: None,
+                                    function: None,
+                                },
+                            ))),
+                        }),
+                        relation: Box::new(Relation::Join(
+                            Box::new(Relation::Base(RelationBase {
+                                name: "table1".to_string(),
+                                columns: vec![
+                                    Column {
+                                        name: "column1".to_string(),
+                                        alias: None,
+                                        table: None,
+                                        function: None,
+                                    },
+                                    Column {
+                                        name: "column2".to_string(),
+                                        alias: None,
+                                        table: None,
+                                        function: None,
+                                    },
+                                ],
+                            })),
+                            Box::new(Relation::Base(RelationBase {
+                                name: "table2".to_string(),
+                                columns: vec![
+                                    Column {
+                                        name: "column1".to_string(),
+                                        alias: None,
+                                        table: None,
+                                        function: None,
+                                    },
+                                    Column {
+                                        name: "column2".to_string(),
+                                        alias: None,
+                                        table: None,
+                                        function: None,
+                                    },
+                                ],
+                            })),
+                            JoinOperator::Cross,
+                            None,
+                        )),
+                    }),
+                ),
+                condition: RelationalCondition {
+                    condition: ConditionExpression::ComparisonOp(ConditionTree {
+                        operator: Operator::Equal,
+                        left: Box::new(ConditionExpression::Base(ConditionBase::Field(
+                            Column {
+                                name: "column1".to_string(),
+                                alias: None,
+                                table: None,
+                                function: None,
+                            },
+                        ))),
+                        right: Box::new(ConditionExpression::Base(ConditionBase::Field(
+                            Column {
+                                name: "column1".to_string(),
+                                alias: None,
+                                table: None,
+                                function: None,
+                            },
+                        ))),
+                    }),
+                    relation: Box::new(Relation::Join(
+                        Box::new(Relation::Base(RelationBase {
+                            name: "table1".to_string(),
+                            columns: vec![
+                                Column {
+                                    name: "column1".to_string(),
+                                    alias: None,
+                                    table: None,
+                                    function: None,
+                                },
+                                Column {
+                                    name: "column2".to_string(),
+                                    alias: None,
+                                    table: None,
+                                    function: None,
+                                },
+                            ],
+                        })),
+                        Box::new(Relation::Base(RelationBase {
+                            name: "table2".to_string(),
+                            columns: vec![
+                                Column {
+                                    name: "column1".to_string(),
+                                    alias: None,
+                                    table: None,
+                                    function: None,
+                                },
+                                Column {
+                                    name: "column2".to_string(),
+                                    alias: None,
+                                    table: None,
+                                    function: None,
+                                },
+                            ],
+                        })),
+                        JoinOperator::Cross,
+                        None,
+                    )),
+                },
+            })),
+            values: vec![
+                ProjectionValue::Column(Column {
+                    name: "column1".to_string(),
+                    alias: None,
+                    table: None,
+                    function: None,
+                }),
+                ProjectionValue::Column(Column {
+                    name: "column2".to_string(),
+                    alias: None,
+                    table: None,
+                    function: None,
+                }),
                 ProjectionValue::Column(Column {
                     name: "column1".to_string(),
                     alias: None,

@@ -61,6 +61,15 @@ impl TreeNode for FieldValueExpression {
     }
 }
 
+impl fmt::Display for FieldValueExpression {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            FieldValueExpression::Arithmetic(ref ari) => write!(f, "{}", ari),
+            FieldValueExpression::Literal(ref lit) => write!(f, "{}", lit),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub enum Operator {
     And,
