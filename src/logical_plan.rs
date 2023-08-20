@@ -10,10 +10,8 @@ use crate::{
     join::{JoinClause, JoinCondition, JoinOperator, JoinRightHand},
     order::{OrderByClause, OrderType},
     select::{GroupByClause, SelectStatement},
-    table::Table,
+    table::Table, schema::Schema,
 };
-
-pub type Schema = BTreeMap<String, Vec<Column>>;
 
 pub trait LogicalPlan {
     fn schema(&self) -> Schema;
@@ -530,8 +528,6 @@ impl From<(OrderByClause, Relation)> for Relation {
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
-
     use super::*;
     use crate::{common::Literal, select::select_statement};
 
@@ -707,77 +703,77 @@ mod tests {
 
     #[test]
     fn test_simple_join() {
-        // let sql = b"SELECT * FROM table1, table2";
-        // let parse_tree = select_statement(sql).unwrap().1;
+        let sql = b"SELECT * FROM table1, table2";
+        let parse_tree = select_statement(sql).unwrap().1;
         let schema = get_schema();
-        // let logical_plan: Relation = (parse_tree, schema.clone()).into();
-        // let expected = Relation::Projection(Box::new(Projection {
-        //     relation: Relation::Join(
-        //         Box::new(Relation::Base(RelationBase {
-        //             name: "table1".to_string(),
-        //             columns: vec![
-        //                 Column {
-        //                     name: "column1".to_string(),
-        //                     alias: None,
-        //                     table: None,
-        //                     function: None,
-        //                 },
-        //                 Column {
-        //                     name: "column2".to_string(),
-        //                     alias: None,
-        //                     table: None,
-        //                     function: None,
-        //                 },
-        //             ],
-        //         })),
-        //         Box::new(Relation::Base(RelationBase {
-        //             name: "table2".to_string(),
-        //             columns: vec![
-        //                 Column {
-        //                     name: "column1".to_string(),
-        //                     alias: None,
-        //                     table: None,
-        //                     function: None,
-        //                 },
-        //                 Column {
-        //                     name: "column2".to_string(),
-        //                     alias: None,
-        //                     table: None,
-        //                     function: None,
-        //                 },
-        //             ],
-        //         })),
-        //         JoinOperator::Cross,
-        //         None,
-        //     ),
-        //     values: vec![
-        //         ProjectionValue::Column(Column {
-        //             name: "column1".to_string(),
-        //             alias: None,
-        //             table: None,
-        //             function: None,
-        //         }),
-        //         ProjectionValue::Column(Column {
-        //             name: "column2".to_string(),
-        //             alias: None,
-        //             table: None,
-        //             function: None,
-        //         }),
-        //         ProjectionValue::Column(Column {
-        //             name: "column1".to_string(),
-        //             alias: None,
-        //             table: None,
-        //             function: None,
-        //         }),
-        //         ProjectionValue::Column(Column {
-        //             name: "column2".to_string(),
-        //             alias: None,
-        //             table: None,
-        //             function: None,
-        //         }),
-        //     ],
-        // }));
-        // assert_eq!(logical_plan, expected);
+        let logical_plan: Relation = (parse_tree, schema.clone()).into();
+        let expected = Relation::Projection(Box::new(Projection {
+            relation: Relation::Join(
+                Box::new(Relation::Base(RelationBase {
+                    name: "table1".to_string(),
+                    columns: vec![
+                        Column {
+                            name: "column1".to_string(),
+                            alias: None,
+                            table: None,
+                            function: None,
+                        },
+                        Column {
+                            name: "column2".to_string(),
+                            alias: None,
+                            table: None,
+                            function: None,
+                        },
+                    ],
+                })),
+                Box::new(Relation::Base(RelationBase {
+                    name: "table2".to_string(),
+                    columns: vec![
+                        Column {
+                            name: "column1".to_string(),
+                            alias: None,
+                            table: None,
+                            function: None,
+                        },
+                        Column {
+                            name: "column2".to_string(),
+                            alias: None,
+                            table: None,
+                            function: None,
+                        },
+                    ],
+                })),
+                JoinOperator::Cross,
+                None,
+            ),
+            values: vec![
+                ProjectionValue::Column(Column {
+                    name: "column1".to_string(),
+                    alias: None,
+                    table: None,
+                    function: None,
+                }),
+                ProjectionValue::Column(Column {
+                    name: "column2".to_string(),
+                    alias: None,
+                    table: None,
+                    function: None,
+                }),
+                ProjectionValue::Column(Column {
+                    name: "column1".to_string(),
+                    alias: None,
+                    table: None,
+                    function: None,
+                }),
+                ProjectionValue::Column(Column {
+                    name: "column2".to_string(),
+                    alias: None,
+                    table: None,
+                    function: None,
+                }),
+            ],
+        }));
+        assert_eq!(logical_plan, expected);
 
         let sql = b"SELECT * FROM table1, table2 WHERE table1.column1 = table2.column1";
         let parse_tree = select_statement(sql).unwrap().1;
