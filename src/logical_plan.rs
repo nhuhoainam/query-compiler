@@ -9,8 +9,9 @@ use crate::{
     condition::{ConditionBase, ConditionExpression, ConditionTree},
     join::{JoinClause, JoinCondition, JoinOperator, JoinRightHand},
     order::{OrderByClause, OrderType},
+    schema::Schema,
     select::{GroupByClause, SelectStatement},
-    table::Table, schema::Schema,
+    table::Table,
 };
 
 pub trait LogicalPlan {
@@ -284,6 +285,20 @@ impl From<(JoinCondition, Schema)> for RelationalCondition {
                     },
                 )
             }
+        }
+    }
+}
+
+impl From<(ConditionExpression, Schema)> for RelationalCondition {
+    fn from(value: (ConditionExpression, Schema)) -> Self {
+        match value.0 {
+            ConditionExpression::ComparisonOp(_) => todo!(),
+            ConditionExpression::LogicalOp(_) => todo!(),
+            ConditionExpression::NegationOp(_) => todo!(),
+            ConditionExpression::ExistsOp(_) => todo!(),
+            ConditionExpression::Base(_) => todo!(),
+            ConditionExpression::Arithmetic(_) => todo!(),
+            ConditionExpression::Bracketed(_) => todo!(),
         }
     }
 }

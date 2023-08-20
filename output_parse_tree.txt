@@ -1,0 +1,18 @@
+<Query>
+├╼ SELECT
+│ ├╼ ID
+│ └╼ name
+├╼ FROM
+│ └╼ Student
+└╼ WHERE
+  └╼ NOT IN
+    ├╼ ID
+    └╼ <Query>
+      ├╼ SELECT DISTINCT
+      │ └╼ ID
+      ├╼ FROM
+      │ └╼ Takes
+      └╼ WHERE
+        └╼ <
+          ├╼ Takes.year
+          └╼ '2023'

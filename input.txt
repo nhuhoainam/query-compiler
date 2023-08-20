@@ -1,0 +1,7 @@
+SELECT ID, name
+FROM Student
+WHERE ID NOT IN (
+	SELECT DISTINCT ID
+	FROM Takes
+	WHERE Takes.[year] < '2023'
+);

@@ -7,14 +7,7 @@ use query_compiler::{
 };
 
 fn main() {
-    run_schema();
-    // run_query();
-}
-
-fn run_schema() {
-    let input = fs::read_to_string("schema.txt").unwrap();
-    let res = schema(input.as_bytes()).unwrap().1;
-    print_schema(res);
+    run_query();
 }
 
 fn run_query() {
@@ -32,64 +25,6 @@ fn run_query() {
 }
 
 fn get_schema() -> Schema {
-    let mut schema: Schema = BTreeMap::new();
-    schema.insert(
-        "table1".to_string(),
-        vec![
-            Column {
-                name: "column1".to_string(),
-                alias: None,
-                table: None,
-                function: None,
-            },
-            Column {
-                name: "column2".to_string(),
-                alias: None,
-                table: None,
-                function: None,
-            },
-            Column {
-                name: "column3".to_string(),
-                alias: None,
-                table: None,
-                function: None,
-            },
-            Column {
-                name: "column4".to_string(),
-                alias: None,
-                table: None,
-                function: None,
-            },
-        ],
-    );
-    schema.insert(
-        "table2".to_string(),
-        vec![
-            Column {
-                name: "column1".to_string(),
-                alias: None,
-                table: None,
-                function: None,
-            },
-            Column {
-                name: "column2".to_string(),
-                alias: None,
-                table: None,
-                function: None,
-            },
-            Column {
-                name: "column3".to_string(),
-                alias: None,
-                table: None,
-                function: None,
-            },
-            Column {
-                name: "column4".to_string(),
-                alias: None,
-                table: None,
-                function: None,
-            },
-        ],
-    );
-    schema
+    let input = fs::read_to_string("schema.txt").unwrap();
+    schema(input.as_bytes()).unwrap().1
 }

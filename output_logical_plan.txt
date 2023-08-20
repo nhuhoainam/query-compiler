@@ -1,0 +1,5 @@
+PROJECTION column1 column2 column3 column4 column1 column2 column3 column4 
+└╼ SELECTION table1.column1 = table2.column1
+  └╼ CROSS JOIN 
+    ├╼ table1
+    └╼ table2

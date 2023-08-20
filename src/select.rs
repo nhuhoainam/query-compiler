@@ -43,6 +43,7 @@ pub struct SelectStatement {
 
 impl TreeNode for SelectStatement {
     fn populate(&self, parent: &TreeBuilder) {
+        let mut branch_outer = parent.add_branch("<Query>");
         let mut branch = parent
             .add_branch(format!("SELECT{}", if self.distinct { " DISTINCT" } else { "" }).as_str());
         for sel_item in self.sel_list.iter() {
@@ -81,6 +82,7 @@ impl TreeNode for SelectStatement {
             }
             branch.release();
         }
+        branch_outer.release();
     }
 }
 
