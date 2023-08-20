@@ -121,7 +121,18 @@ impl LogicalPlan for Relation {
             }
             Relation::Selection(selection) => selection.relation.schema(),
             Relation::Projection(projection) => projection.relation.schema(),
-            Relation::Rename(rename) => rename.relation.schema(),
+            Relation::Rename(rename) => {
+                let mut inner = rename.relation.schema();
+                match inner.len() {
+                    0 => panic!("no table"),
+                    1 => {
+                        let value = inner.values().next().unwrap().clone();
+                        inner.insert(rename.alias.clone(), value);
+                        inner
+                    }
+                    _ => unimplemented!("rename more than one table"),
+                }
+            }
             Relation::Join(left, right, _, _) => {
                 let mut left = left.schema();
                 let mut right = right.schema();
@@ -211,13 +222,13 @@ impl From<(Vec<FieldDefinitionExpression>, Relation)> for Relation {
                             panic!("no such table: {}", t.name)
                         }
                     }
-                    FieldDefinitionExpression::Column(col) => {
+                    FieldDefinitionExpression::Column(ref col) => {
                         let schema = value.1.schema();
                         let mut found = false;
                         for (t, v) in schema {
                             for c in v {
                                 if c.name == col.name || col.name == format!("{}.{}", t, c.name) {
-                                    values.push(ProjectionValue::Column(c));
+                                    values.push(ProjectionValue::Column(col.to_owned()));
                                     found = true;
                                     break;
                                 }
@@ -321,10 +332,21 @@ impl
     ) -> Self {
         let from = match value.0.len() {
             0 => panic!("no table"),
-            1 => Relation::Base(RelationBase {
-                name: value.0[0].name.clone(),
-                columns: value.3.get(&value.0[0].name).unwrap().clone(), // TODO: handle None
-            }),
+            1 => {
+                match value.0[0].alias {
+                    Some(ref a) => Relation::Rename(Box::new(Rename {
+                        relation: Relation::Base(RelationBase {
+                            name: value.0[0].name.clone(),
+                            columns: value.3.get(&value.0[0].name).unwrap().clone(), // TODO: handle None
+                        }),
+                        alias: a.clone(),
+                    })),
+                    None => Relation::Base(RelationBase {
+                        name: value.0[0].name.clone(),
+                        columns: value.3.get(&value.0[0].name).unwrap().clone(), // TODO: handle None
+                    }),
+                }
+            }
             _ => {
                 let first = value.0[0].clone();
                 value.0.into_iter().skip(1).fold(
@@ -416,7 +438,13 @@ impl TreeNode for ProjectionValue {
 impl fmt::Display for ProjectionValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self {
-            ProjectionValue::Column(col) => write!(f, "{}", col.name),
+            ProjectionValue::Column(col) => {
+                match &col.table {
+                    Some(t) => write!(f, "{}.", t)?,
+                    None => (),
+                }
+                write!(f, "{}", col.name)
+            }
             ProjectionValue::Expression(exp) => write!(f, "{}", exp),
         }
     }
