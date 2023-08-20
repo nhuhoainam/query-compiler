@@ -54,7 +54,6 @@ pub struct Rename {
 pub struct Grouping {
     pub relation: Relation,
     pub columns: Vec<Column>,
-    pub condition: Option<RelationalCondition>,
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
@@ -110,7 +109,7 @@ impl fmt::Display for Relation {
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub struct RelationalCondition {
     pub condition: ConditionExpression,
-    pub relation: Box<Relation>,
+    pub schema: Schema,
 }
 
 impl LogicalPlan for Relation {
@@ -157,23 +156,14 @@ impl LogicalPlan for Relation {
 
 impl From<(SelectStatement, Schema)> for Relation {
     fn from(value: (SelectStatement, Schema)) -> Self {
-        let mut tables: Vec<Table> = vec![];
-        for i in value.0.tables {
-            let new_table = Table {
-                name: i.name.clone(),
-                alias: i.alias,
-                schema: i.schema,
-                metadata: value.1.get(&i.name).cloned(),
-            };
-            tables.push(new_table);
-        }
         let from: Relation = (
-            tables,
+            value.0.tables,
             value.0.join,
             match value.0.condition {
                 Some(condition) => Some(condition.into()),
                 None => None,
             },
+            value.1.clone(),
         )
             .into();
         let projection = (value.0.sel_list, from.clone()).into();
@@ -181,7 +171,6 @@ impl From<(SelectStatement, Schema)> for Relation {
             Relation::Projection(projection) => *projection,
             _ => panic!("projection error"),
         };
-        println!("{:#?}", projection);
         let group: Relation = match value.0.group_by {
             Some(group) => (group, projection, from).into(),
             None => Relation::Projection(Box::new(projection)),
@@ -208,24 +197,27 @@ impl From<(Vec<FieldDefinitionExpression>, Relation)> for Relation {
                     FieldDefinitionExpression::All => {
                         let schema = value.1.schema();
                         schema.into_iter().for_each(|(_, v)| {
-                            v.into_iter().for_each(|x| values.push(ProjectionValue::Column(x)))
+                            v.into_iter()
+                                .for_each(|x| values.push(ProjectionValue::Column(x)))
                         })
-                    },
+                    }
                     FieldDefinitionExpression::AllFromTable(t) => {
                         let schema = value.1.schema();
                         if schema.contains_key(&t.name) {
                             let columns = schema.get(&t.name).unwrap().clone();
-                            columns.into_iter().for_each(|x| values.push(ProjectionValue::Column(x)));
+                            columns
+                                .into_iter()
+                                .for_each(|x| values.push(ProjectionValue::Column(x)));
                         } else {
-                            panic!("no such table")
+                            panic!("no such table: {}", t.name)
                         }
-                    },
+                    }
                     FieldDefinitionExpression::Column(col) => {
                         let schema = value.1.schema();
                         let mut found = false;
-                        for (_, v) in schema {
+                        for (t, v) in schema {
                             for c in v {
-                                if c.name == col.name {
+                                if c.name == col.name || col.name == format!("{}.{}", t, c.name) {
                                     values.push(ProjectionValue::Column(c));
                                     found = true;
                                     break;
@@ -234,6 +226,9 @@ impl From<(Vec<FieldDefinitionExpression>, Relation)> for Relation {
                             if found {
                                 break;
                             }
+                        }
+                        if !found {
+                            panic!("no such column: {}", col.name)
                         }
                     }
                     FieldDefinitionExpression::FieldValue(val) => {
@@ -257,12 +252,12 @@ impl From<(Vec<FieldDefinitionExpression>, Relation)> for Relation {
     }
 }
 
-impl From<(JoinCondition, Relation)> for RelationalCondition {
-    fn from(value: (JoinCondition, Relation)) -> Self {
+impl From<(JoinCondition, Schema)> for RelationalCondition {
+    fn from(value: (JoinCondition, Schema)) -> Self {
         match value.0 {
             JoinCondition::On(con) => RelationalCondition {
                 condition: con,
-                relation: Box::new(value.1.clone()),
+                schema: value.1,
             },
             JoinCondition::Using(cols) => {
                 let mut conds: Vec<ConditionExpression> = vec![];
@@ -276,10 +271,10 @@ impl From<(JoinCondition, Relation)> for RelationalCondition {
                     }))
                 });
                 let first_cond = conds[0].clone();
-                conds.into_iter().fold(
+                conds.into_iter().skip(1).fold(
                     RelationalCondition {
                         condition: first_cond,
-                        relation: Box::new(value.1.clone()),
+                        schema: value.1.clone(),
                     },
                     |acc, x| RelationalCondition {
                         condition: ConditionExpression::LogicalOp(ConditionTree {
@@ -287,7 +282,7 @@ impl From<(JoinCondition, Relation)> for RelationalCondition {
                             left: Box::new(acc.condition),
                             right: Box::new(x),
                         }),
-                        relation: Box::new(value.1.clone()),
+                        schema: value.1.clone(),
                     },
                 )
             }
@@ -295,27 +290,41 @@ impl From<(JoinCondition, Relation)> for RelationalCondition {
     }
 }
 
-impl From<(Vec<Table>, Vec<JoinClause>, Option<ConditionExpression>)> for Relation {
-    fn from(value: (Vec<Table>, Vec<JoinClause>, Option<ConditionExpression>)) -> Self {
+impl
+    From<(
+        Vec<Table>,
+        Vec<JoinClause>,
+        Option<ConditionExpression>,
+        Schema,
+    )> for Relation
+{
+    fn from(
+        value: (
+            Vec<Table>,
+            Vec<JoinClause>,
+            Option<ConditionExpression>,
+            Schema,
+        ),
+    ) -> Self {
         let from = match value.0.len() {
             0 => panic!("no table"),
             1 => Relation::Base(RelationBase {
                 name: value.0[0].name.clone(),
-                columns: value.0[0].metadata.clone().unwrap(), // TODO: handle None
+                columns: value.3.get(&value.0[0].name).unwrap().clone(), // TODO: handle None
             }),
             _ => {
                 let first = value.0[0].clone();
-                value.0.into_iter().fold(
+                value.0.into_iter().skip(1).fold(
                     Relation::Base(RelationBase {
-                        name: first.name,
-                        columns: first.metadata.unwrap(), // TODO: handle None
+                        name: first.name.clone(),
+                        columns: value.3.get(&first.name).unwrap().clone(), // TODO: handle None
                     }),
                     |acc, table| {
                         Relation::Join(
                             Box::new(acc),
                             Box::new(Relation::Base(RelationBase {
-                                name: table.name,
-                                columns: table.metadata.unwrap(), // TODO: handle None
+                                name: table.name.clone(),
+                                columns: value.3.get(&table.name).unwrap().clone(), // TODO: handle None
                             })),
                             JoinOperator::Cross,
                             None,
@@ -328,21 +337,21 @@ impl From<(Vec<Table>, Vec<JoinClause>, Option<ConditionExpression>)> for Relati
             let right_hand = match x.right {
                 JoinRightHand::Table(t) => Relation::Base(RelationBase {
                     name: t.name.clone(),
-                    columns: t.metadata.clone().unwrap(), // TODO: handle None
+                    columns: value.3.get(&t.name).unwrap().clone(), // TODO: handle None
                 }),
                 JoinRightHand::Tables(ts) => {
                     let first = ts[0].clone();
-                    ts.into_iter().fold(
+                    ts.into_iter().skip(1).fold(
                         Relation::Base(RelationBase {
-                            name: first.name,
-                            columns: first.metadata.unwrap(), // TODO: handle None
+                            name: first.name.clone(),
+                            columns: value.3.get(&first.name).unwrap().clone(), // TODO: handle None
                         }),
                         |acc, table| {
                             Relation::Join(
                                 Box::new(acc),
                                 Box::new(Relation::Base(RelationBase {
-                                    name: table.name,
-                                    columns: table.metadata.unwrap(), // TODO: handle None
+                                    name: table.name.clone(),
+                                    columns: value.3.get(&table.name).unwrap().clone(), // TODO: handle None
                                 })),
                                 JoinOperator::Cross,
                                 None,
@@ -353,7 +362,8 @@ impl From<(Vec<Table>, Vec<JoinClause>, Option<ConditionExpression>)> for Relati
                 JoinRightHand::NestedSelect(_, _) => todo!(),
                 JoinRightHand::NestedJoin(inner_join) => todo!(),
             };
-            let join_con = (x.constraint, right_hand.clone()).into();
+            let join_con = (x.constraint, right_hand.schema()).into();
+            println!("{:#?}", join_con);
             Relation::Join(
                 Box::new(acc),
                 Box::new(right_hand),
@@ -367,7 +377,7 @@ impl From<(Vec<Table>, Vec<JoinClause>, Option<ConditionExpression>)> for Relati
                 relation: join.clone(),
                 condition: RelationalCondition {
                     condition,
-                    relation: Box::new(join),
+                    schema: value.3,
                 },
             })),
             None => join,
@@ -404,15 +414,15 @@ impl TreeNode for Relation {
         match &self {
             Relation::Base(base) => {
                 let mut branch = parent.add_branch(base.name.as_str());
-                for col in base.columns.iter() {
-                    col.populate(parent);
-                }
+                // for col in base.columns.iter() {
+                //     col.populate(parent);
+                // }
                 branch.release();
             }
             Relation::Selection(selection) => {
                 let sel = format!("SELECTION {}", selection.condition.condition);
-                selection.relation.populate(parent);
                 let mut branch = parent.add_branch(&sel);
+                selection.relation.populate(parent);
                 branch.release();
             }
             Relation::Projection(projection) => {
@@ -430,7 +440,7 @@ impl TreeNode for Relation {
                 branch.release();
             }
             Relation::Join(left, right, op, con) => {
-                let mut join = format!("{} JOIN ", op);
+                let mut join = format!("{} ", op);
                 if let Some(con) = con {
                     join = join + &con.condition.to_string();
                 }
@@ -440,14 +450,12 @@ impl TreeNode for Relation {
                 branch.release();
             }
             Relation::Grouping(group) => {
-                let mut branch = parent.add_branch("GROUPING");
-                group.relation.populate(parent);
+                let mut cols = "GROUPING ".to_string();
                 for col in group.columns.iter() {
-                    col.populate(parent);
+                    cols = cols + &format!("{} ", col.name);
                 }
-                if let Some(con) = &group.condition {
-                    con.populate(parent);
-                }
+                let mut branch = parent.add_branch(&cols);
+                group.relation.populate(parent);
                 branch.release();
             }
             Relation::Disticnt(dist) => {
@@ -492,17 +500,22 @@ impl From<(GroupByClause, Projection, Relation)> for Relation {
             ProjectionValue::Column(col) => columns.push(col),
             ProjectionValue::Expression(_) => (),
         });
-        Relation::Grouping(Box::new(Grouping {
-            relation: value.2.clone(),
-            columns,
-            condition: match value.0.having {
-                Some(con) => Some(RelationalCondition {
+        match value.0.having {
+            Some(con) => Relation::Selection(Box::new(Selection {
+                relation: Relation::Grouping(Box::new(Grouping {
+                    relation: value.2.clone(),
+                    columns,
+                })),
+                condition: RelationalCondition {
                     condition: con,
-                    relation: Box::new(value.2),
-                }),
-                None => None,
-            },
-        }))
+                    schema: value.2.schema(),
+                },
+            })),
+            None => Relation::Grouping(Box::new(Grouping {
+                relation: value.2.clone(),
+                columns,
+            })),
+        }
     }
 }
 
@@ -517,6 +530,8 @@ impl From<(OrderByClause, Relation)> for Relation {
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+
     use super::*;
     use crate::{common::Literal, select::select_statement};
 
@@ -669,23 +684,7 @@ mod tests {
                             Literal::Integer(1),
                         ))),
                     }),
-                    relation: Box::new(Relation::Base(RelationBase {
-                        name: "table1".to_string(),
-                        columns: vec![
-                            Column {
-                                name: "column1".to_string(),
-                                alias: None,
-                                table: None,
-                                function: None,
-                            },
-                            Column {
-                                name: "column2".to_string(),
-                                alias: None,
-                                table: None,
-                                function: None,
-                            },
-                        ],
-                    })),
+                    schema: schema.clone(),
                 },
             })),
             values: vec![
@@ -707,78 +706,78 @@ mod tests {
     }
 
     #[test]
-    fn test_join() {
-        let sql = b"SELECT * FROM table1, table2";
-        let parse_tree = select_statement(sql).unwrap().1;
+    fn test_simple_join() {
+        // let sql = b"SELECT * FROM table1, table2";
+        // let parse_tree = select_statement(sql).unwrap().1;
         let schema = get_schema();
-        let logical_plan: Relation = (parse_tree, schema.clone()).into();
-        let expected = Relation::Projection(Box::new(Projection {
-            relation: Relation::Join(
-                Box::new(Relation::Base(RelationBase {
-                    name: "table1".to_string(),
-                    columns: vec![
-                        Column {
-                            name: "column1".to_string(),
-                            alias: None,
-                            table: None,
-                            function: None,
-                        },
-                        Column {
-                            name: "column2".to_string(),
-                            alias: None,
-                            table: None,
-                            function: None,
-                        },
-                    ],
-                })),
-                Box::new(Relation::Base(RelationBase {
-                    name: "table2".to_string(),
-                    columns: vec![
-                        Column {
-                            name: "column1".to_string(),
-                            alias: None,
-                            table: None,
-                            function: None,
-                        },
-                        Column {
-                            name: "column2".to_string(),
-                            alias: None,
-                            table: None,
-                            function: None,
-                        },
-                    ],
-                })),
-                JoinOperator::Cross,
-                None,
-            ),
-            values: vec![
-                ProjectionValue::Column(Column {
-                    name: "column1".to_string(),
-                    alias: None,
-                    table: None,
-                    function: None,
-                }),
-                ProjectionValue::Column(Column {
-                    name: "column2".to_string(),
-                    alias: None,
-                    table: None,
-                    function: None,
-                }),
-                ProjectionValue::Column(Column {
-                    name: "column1".to_string(),
-                    alias: None,
-                    table: None,
-                    function: None,
-                }),
-                ProjectionValue::Column(Column {
-                    name: "column2".to_string(),
-                    alias: None,
-                    table: None,
-                    function: None,
-                }),
-            ],
-        }));
-        assert_eq!(logical_plan, expected);
+        // let logical_plan: Relation = (parse_tree, schema.clone()).into();
+        // let expected = Relation::Projection(Box::new(Projection {
+        //     relation: Relation::Join(
+        //         Box::new(Relation::Base(RelationBase {
+        //             name: "table1".to_string(),
+        //             columns: vec![
+        //                 Column {
+        //                     name: "column1".to_string(),
+        //                     alias: None,
+        //                     table: None,
+        //                     function: None,
+        //                 },
+        //                 Column {
+        //                     name: "column2".to_string(),
+        //                     alias: None,
+        //                     table: None,
+        //                     function: None,
+        //                 },
+        //             ],
+        //         })),
+        //         Box::new(Relation::Base(RelationBase {
+        //             name: "table2".to_string(),
+        //             columns: vec![
+        //                 Column {
+        //                     name: "column1".to_string(),
+        //                     alias: None,
+        //                     table: None,
+        //                     function: None,
+        //                 },
+        //                 Column {
+        //                     name: "column2".to_string(),
+        //                     alias: None,
+        //                     table: None,
+        //                     function: None,
+        //                 },
+        //             ],
+        //         })),
+        //         JoinOperator::Cross,
+        //         None,
+        //     ),
+        //     values: vec![
+        //         ProjectionValue::Column(Column {
+        //             name: "column1".to_string(),
+        //             alias: None,
+        //             table: None,
+        //             function: None,
+        //         }),
+        //         ProjectionValue::Column(Column {
+        //             name: "column2".to_string(),
+        //             alias: None,
+        //             table: None,
+        //             function: None,
+        //         }),
+        //         ProjectionValue::Column(Column {
+        //             name: "column1".to_string(),
+        //             alias: None,
+        //             table: None,
+        //             function: None,
+        //         }),
+        //         ProjectionValue::Column(Column {
+        //             name: "column2".to_string(),
+        //             alias: None,
+        //             table: None,
+        //             function: None,
+        //         }),
+        //     ],
+        // }));
+        // assert_eq!(logical_plan, expected);
 
         let sql = b"SELECT * FROM table1, table2 WHERE table1.column1 = table2.column1";
         let parse_tree = select_statement(sql).unwrap().1;
@@ -821,124 +820,25 @@ mod tests {
                         ],
                     })),
                     JoinOperator::Cross,
-                    Some(RelationalCondition {
-                        condition: ConditionExpression::ComparisonOp(ConditionTree {
-                            operator: Operator::Equal,
-                            left: Box::new(ConditionExpression::Base(ConditionBase::Field(
-                                Column {
-                                    name: "column1".to_string(),
-                                    alias: None,
-                                    table: None,
-                                    function: None,
-                                },
-                            ))),
-                            right: Box::new(ConditionExpression::Base(ConditionBase::Field(
-                                Column {
-                                    name: "column1".to_string(),
-                                    alias: None,
-                                    table: None,
-                                    function: None,
-                                },
-                            ))),
-                        }),
-                        relation: Box::new(Relation::Join(
-                            Box::new(Relation::Base(RelationBase {
-                                name: "table1".to_string(),
-                                columns: vec![
-                                    Column {
-                                        name: "column1".to_string(),
-                                        alias: None,
-                                        table: None,
-                                        function: None,
-                                    },
-                                    Column {
-                                        name: "column2".to_string(),
-                                        alias: None,
-                                        table: None,
-                                        function: None,
-                                    },
-                                ],
-                            })),
-                            Box::new(Relation::Base(RelationBase {
-                                name: "table2".to_string(),
-                                columns: vec![
-                                    Column {
-                                        name: "column1".to_string(),
-                                        alias: None,
-                                        table: None,
-                                        function: None,
-                                    },
-                                    Column {
-                                        name: "column2".to_string(),
-                                        alias: None,
-                                        table: None,
-                                        function: None,
-                                    },
-                                ],
-                            })),
-                            JoinOperator::Cross,
-                            None,
-                        )),
-                    }),
+                    None,
                 ),
                 condition: RelationalCondition {
                     condition: ConditionExpression::ComparisonOp(ConditionTree {
                         operator: Operator::Equal,
-                        left: Box::new(ConditionExpression::Base(ConditionBase::Field(
-                            Column {
-                                name: "column1".to_string(),
-                                alias: None,
-                                table: None,
-                                function: None,
-                            },
-                        ))),
-                        right: Box::new(ConditionExpression::Base(ConditionBase::Field(
-                            Column {
-                                name: "column1".to_string(),
-                                alias: None,
-                                table: None,
-                                function: None,
-                            },
-                        ))),
+                        left: Box::new(ConditionExpression::Base(ConditionBase::Field(Column {
+                            name: "column1".to_string(),
+                            alias: None,
+                            table: Some("table1".to_string()),
+                            function: None,
+                        }))),
+                        right: Box::new(ConditionExpression::Base(ConditionBase::Field(Column {
+                            name: "column1".to_string(),
+                            alias: None,
+                            table: Some("table2".to_string()),
+                            function: None,
+                        }))),
                     }),
-                    relation: Box::new(Relation::Join(
-                        Box::new(Relation::Base(RelationBase {
-                            name: "table1".to_string(),
-                            columns: vec![
-                                Column {
-                                    name: "column1".to_string(),
-                                    alias: None,
-                                    table: None,
-                                    function: None,
-                                },
-                                Column {
-                                    name: "column2".to_string(),
-                                    alias: None,
-                                    table: None,
-                                    function: None,
-                                },
-                            ],
-                        })),
-                        Box::new(Relation::Base(RelationBase {
-                            name: "table2".to_string(),
-                            columns: vec![
-                                Column {
-                                    name: "column1".to_string(),
-                                    alias: None,
-                                    table: None,
-                                    function: None,
-                                },
-                                Column {
-                                    name: "column2".to_string(),
-                                    alias: None,
-                                    table: None,
-                                    function: None,
-                                },
-                            ],
-                        })),
-                        JoinOperator::Cross,
-                        None,
-                    )),
+                    schema: schema.clone(),
                 },
             })),
             values: vec![

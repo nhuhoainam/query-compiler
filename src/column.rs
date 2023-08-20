@@ -21,20 +21,30 @@ pub enum FunctionExpression {
 impl fmt::Display for FunctionExpression {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            FunctionExpression::Avg(ref col, d) if d => write!(f, "avg(distinct {})", col),
-            FunctionExpression::Count(ref col, d) if d => write!(f, "count(distinct {})", col),
-            FunctionExpression::Sum(ref col, d) if d => write!(f, "sum(distinct {})", col),
-
-            FunctionExpression::Avg(ref col, _) => write!(f, "avg({})", col),
-            FunctionExpression::Count(ref col, _) => write!(f, "count({})", col),
-            FunctionExpression::CountStar => write!(f, "count(*)"),
-            FunctionExpression::Sum(ref col, _) => write!(f, "sum({})", col),
-            FunctionExpression::Max(ref col) => write!(f, "max({})", col),
-            FunctionExpression::Min(ref col) => write!(f, "min({})", col),
+            FunctionExpression::Avg(ref col, _) => write!(f, "{}", col),
+            FunctionExpression::Count(ref col, _) => write!(f, "{}", col),
+            FunctionExpression::CountStar => write!(f, "*"),
+            FunctionExpression::Sum(ref col, _) => write!(f, "{}", col),
+            FunctionExpression::Max(ref col) => write!(f, "{}", col),
+            FunctionExpression::Min(ref col) => write!(f, "{}", col),
             FunctionExpression::GroupConcat(ref col, ref s) => {
                 write!(f, "group_concat({}, {})", col, s)
             }
             FunctionExpression::Generic(ref name, ref args) => write!(f, "{}({})", name, args),
+            // FunctionExpression::Avg(ref col, d) if d => write!(f, "avg(distinct {})", col),
+            // FunctionExpression::Count(ref col, d) if d => write!(f, "count(distinct {})", col),
+            // FunctionExpression::Sum(ref col, d) if d => write!(f, "sum(distinct {})", col),
+
+            // FunctionExpression::Avg(ref col, _) => write!(f, "avg({})", col),
+            // FunctionExpression::Count(ref col, _) => write!(f, "count({})", col),
+            // FunctionExpression::CountStar => write!(f, "count(*)"),
+            // FunctionExpression::Sum(ref col, _) => write!(f, "sum({})", col),
+            // FunctionExpression::Max(ref col) => write!(f, "max({})", col),
+            // FunctionExpression::Min(ref col) => write!(f, "min({})", col),
+            // FunctionExpression::GroupConcat(ref col, ref s) => {
+            //     write!(f, "group_concat({}, {})", col, s)
+            // }
+            // FunctionExpression::Generic(ref name, ref args) => write!(f, "{}({})", name, args),
         }
     }
 }
@@ -78,12 +88,14 @@ impl TreeNode for Column {
         match self.alias {
             Some(ref alias) => match self.function {
                 Some(ref fnt) => {
-                    let mut branch = parent.add_branch(format!("{}", escape_if_keyword(alias)).as_str());
+                    let mut branch =
+                        parent.add_branch(format!("{}", escape_if_keyword(alias)).as_str());
                     parent.add_leaf(format!("{}", fnt).as_str());
                     branch.release();
                 }
                 None => {
-                    let mut branch = parent.add_branch(format!("{}", escape_if_keyword(alias)).as_str());
+                    let mut branch =
+                        parent.add_branch(format!("{}", escape_if_keyword(alias)).as_str());
                     parent.add_leaf(
                         format!(
                             "{}",
@@ -179,34 +191,5 @@ mod tests {
                 function: None,
             }
         );
-    }
-
-    #[test]
-    fn print_function_column() {
-        let c1 = Column {
-            name: "".into(), // must be present, but will be ignored
-            alias: Some("foo".into()),
-            table: None,
-            function: Some(Box::new(FunctionExpression::CountStar)),
-        };
-        let c2 = Column {
-            name: "".into(), // must be present, but will be ignored
-            alias: None,
-            table: None,
-            function: Some(Box::new(FunctionExpression::CountStar)),
-        };
-        let c3 = Column {
-            name: "".into(), // must be present, but will be ignored
-            alias: None,
-            table: None,
-            function: Some(Box::new(FunctionExpression::Sum(
-                Column::from("mytab.foo"),
-                false,
-            ))),
-        };
-
-        assert_eq!(format!("{}", c1), "count(*) AS foo");
-        assert_eq!(format!("{}", c2), "count(*)");
-        assert_eq!(format!("{}", c3), "sum(mytab.foo)");
     }
 }

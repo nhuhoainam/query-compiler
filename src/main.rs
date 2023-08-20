@@ -10,21 +10,18 @@ use query_compiler::{
 };
 
 fn main() {
-    // let input = fs::read_to_string("input.txt").unwrap();
-    // let res = compound_selection(input.as_bytes());
-    // let tree = TreeBuilder::new();
-    // match res {
-    //     Ok(out) => out.1.populate(&tree),
-    //     Err(e) => print!("{:?}", e),
-    // }
-    // tree.write("output.txt").ok();
-    let sql = b"SELECT column1 FROM table";
-    let parse_tree = select_statement(sql).unwrap().1;
+    let input = fs::read_to_string("input.txt").unwrap();
+    let parse_res = select_statement(input.as_bytes());
+    let parse_tree = TreeBuilder::new();
+    let parse = parse_res.unwrap().1;
+    parse.populate(&parse_tree);
+    parse_tree.write("output_parse_tree.txt").ok();
     let schema = get_schema();
-    let res: Relation = (parse_tree, schema).into();
-    let tree = TreeBuilder::new();
-    res.populate(&tree);
-    tree.write("output.txt").ok();
+    let res: Relation = (parse, schema).into();
+    print!("{:#?}", res);
+    let ra_tree = TreeBuilder::new();
+    res.populate(&ra_tree);
+    ra_tree.write("output_logical_plan.txt").ok();
 }
 
 fn get_schema() -> Schema {
@@ -44,6 +41,18 @@ fn get_schema() -> Schema {
                 table: None,
                 function: None,
             },
+            Column {
+                name: "column3".to_string(),
+                alias: None,
+                table: None,
+                function: None,
+            },
+            Column {
+                name: "column4".to_string(),
+                alias: None,
+                table: None,
+                function: None,
+            },
         ],
     );
     schema.insert(
@@ -57,6 +66,18 @@ fn get_schema() -> Schema {
             },
             Column {
                 name: "column2".to_string(),
+                alias: None,
+                table: None,
+                function: None,
+            },
+            Column {
+                name: "column3".to_string(),
+                alias: None,
+                table: None,
+                function: None,
+            },
+            Column {
+                name: "column4".to_string(),
                 alias: None,
                 table: None,
                 function: None,

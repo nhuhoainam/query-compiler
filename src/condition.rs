@@ -645,7 +645,7 @@ mod tests {
         let nested_select = Box::new(SelectStatement {
             sel_list: vec![
                 FieldDefinitionExpression::Column(Column { 
-                    name: "max(salary)".to_string(), 
+                    name: "salary".to_string(), 
                     alias: None, 
                     table: None, 
                     function: Some(Box::new(FunctionExpression::Max(Column::from("salary")))),

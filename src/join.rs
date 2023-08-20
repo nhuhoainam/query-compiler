@@ -12,7 +12,7 @@ use nom::{
 
 use crate::{
     column::Column,
-    common::{as_alias, field_list, table_list, table_reference, opt_delimited, TreeNode},
+    common::{as_alias, field_list, opt_delimited, table_list, table_reference, TreeNode},
     condition::{condition_expr, ConditionExpression},
     select::{nested_select_statement, SelectStatement},
     table::Table,
@@ -53,16 +53,14 @@ impl TreeNode for JoinRightHand {
                     table.populate(parent);
                 }
             }
-            JoinRightHand::NestedSelect(ref s, ref a) => {
-                match a {
-                    Some(ref a) => {
-                        let mut branch = parent.add_branch(format!("{}", a).as_str());
-                        s.populate(parent);
-                        branch.release();
-                    }
-                    None => s.populate(parent),
+            JoinRightHand::NestedSelect(ref s, ref a) => match a {
+                Some(ref a) => {
+                    let mut branch = parent.add_branch(format!("{}", a).as_str());
+                    s.populate(parent);
+                    branch.release();
                 }
-            }
+                None => s.populate(parent),
+            },
             JoinRightHand::NestedJoin(ref j) => {
                 j.populate(parent);
             }
@@ -93,7 +91,7 @@ impl TreeNode for JoinCondition {
                 let mut branch = parent.add_branch("ON");
                 parent.add_leaf(format!("{}", c).as_str());
                 branch.release();
-            },
+            }
             JoinCondition::Using(ref c) => {
                 let mut branch = parent.add_branch("USING");
                 for column in c.iter() {
@@ -117,12 +115,10 @@ impl fmt::Display for JoinRightHand {
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
-            JoinRightHand::NestedSelect(ref s, ref a) => {
-                match a {
-                    Some(ref a) => write!(f, "({}) AS {}", s, a),
-                    None => write!(f, "({})", s),
-                }
-            }
+            JoinRightHand::NestedSelect(ref s, ref a) => match a {
+                Some(ref a) => write!(f, "({}) AS {}", s, a),
+                None => write!(f, "({})", s),
+            },
             JoinRightHand::NestedJoin(ref j) => write!(f, "{}", j),
         }
     }
@@ -308,15 +304,17 @@ mod tests {
             join_constraint(b"on (a = b)"),
             Ok((
                 &[][..],
-                JoinCondition::On(ConditionExpression::ComparisonOp(ConditionTree {
-                    operator: Operator::Equal,
-                    left: Box::new(ConditionExpression::Base(ConditionBase::Field(
-                        Column::from("a")
-                    ))),
-                    right: Box::new(ConditionExpression::Base(ConditionBase::Field(
-                        Column::from("b")
-                    ))),
-                }))
+                JoinCondition::On(ConditionExpression::Bracketed(Box::new(
+                    ConditionExpression::ComparisonOp(ConditionTree {
+                        operator: Operator::Equal,
+                        left: Box::new(ConditionExpression::Base(ConditionBase::Field(
+                            Column::from("a")
+                        ))),
+                        right: Box::new(ConditionExpression::Base(ConditionBase::Field(
+                            Column::from("b")
+                        ))),
+                    })
+                )))
             ))
         );
     }

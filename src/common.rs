@@ -342,7 +342,6 @@ pub fn column_function(i: &[u8]) -> IResult<&[u8], FunctionExpression> {
             |spec| {
                 let (ref col, ref sep) = spec;
                 let sep = match *sep {
-                    // default separator is a comma, see MySQL manual §5.7
                     None => String::from(","),
                     Some(s) => String::from_utf8(s.to_vec()).unwrap(),
                 };
@@ -403,7 +402,6 @@ pub fn table_reference(i: &[u8]) -> IResult<&[u8], Table> {
             None => None,
         },
         schema: None,
-        metadata: None,
     })(i)
 }
 

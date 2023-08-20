@@ -264,7 +264,7 @@ mod tests {
                     ari: Arithmetic::Expr {
                         operator: ArithmeticOperator::Divide,
                         left: Box::new(Arithmetic::Base(ArithmeticBase::Column(Column {
-                            name: "sum(foo)".to_string(),
+                            name: "foo".to_string(),
                             alias: None,
                             table: None,
                             function: Some(Box::new(FunctionExpression::Sum(
