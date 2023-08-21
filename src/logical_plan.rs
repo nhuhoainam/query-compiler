@@ -5,7 +5,7 @@ use debug_tree::TreeBuilder;
 
 use crate::{
     column::Column,
-    common::{FieldDefinitionExpression, FieldValueExpression, Operator, TreeNode},
+    common::{FieldDefinitionExpression, FieldValueExpression, Operator, TreeNode, Literal},
     condition::{ConditionBase, ConditionExpression, ConditionTree},
     join::{JoinClause, JoinCondition, JoinOperator, JoinRightHand},
     order::{OrderByClause, OrderType},
@@ -106,8 +106,32 @@ impl fmt::Display for Relation {
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+pub enum RelationalConditionBase {
+    Field(Column),
+    Literal(Literal),
+    LiteralList(Vec<Literal>),
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+pub struct RelationalConditionTree {
+    pub operator: Operator,
+    pub left: Box<RelationalConditionExpression>,
+    pub right: Box<RelationalConditionExpression>,
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+pub enum RelationalConditionExpression {
+    ComparisonOp(ConditionTree),
+    LogicalOp(ConditionTree),
+    NegationOp(Box<RelationalConditionExpression>),
+    Base(ConditionBase),
+    Arithmetic(FieldValueExpression),
+    Bracketed(Box<RelationalConditionExpression>),
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub struct RelationalCondition {
-    pub condition: ConditionExpression,
+    pub condition: RelationalConditionExpression,
     pub schema: Schema,
 }
 
@@ -300,8 +324,8 @@ impl From<(JoinCondition, Schema)> for RelationalCondition {
     }
 }
 
-impl From<(ConditionExpression, Schema)> for RelationalCondition {
-    fn from(value: (ConditionExpression, Schema)) -> Self {
+impl From<(ConditionExpression, Relation, Schema)> for Relation {
+    fn from(value: (ConditionExpression, Relation, Schema)) -> Self {
         match value.0 {
             ConditionExpression::ComparisonOp(_) => todo!(),
             ConditionExpression::LogicalOp(_) => todo!(),
