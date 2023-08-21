@@ -1,6 +1,6 @@
 use std::fmt;
 
-use nom::{IResult, branch::alt, combinator::{map, opt}, sequence::{preceded, delimited, tuple}, bytes::complete::{tag_no_case, tag}, character::complete::{multispace1, multispace0}, multi::many1};
+use nom::{IResult, branch::alt, combinator::{map, opt}, sequence::{preceded, delimited, tuple}, bytes::complete::{tag_no_case, tag}, character::complete::{multispace1, multispace0}, multi::{many1, many0}};
 
 use crate::{select::{SelectStatement, nested_select_statement}, order::{OrderByClause, order_by_clause}, common::{opt_delimited, statement_terminator, TreeNode}};
 
@@ -117,7 +117,7 @@ fn other_selects(i: &[u8]) -> IResult<&[u8], (Option<CompoundSelectOperator>, Se
 pub fn compound_selection(i: &[u8]) -> IResult<&[u8], CompoundSelectStatement> {
     let (remaining_input, (first_select, other_selects, _, order, _)) = tuple((
         opt_delimited(tag("("), nested_select_statement, tag(")")),
-        many1(other_selects),
+        many0(other_selects),
         multispace0,
         opt(order_by_clause),
         statement_terminator,
