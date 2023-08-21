@@ -5,7 +5,8 @@ use debug_tree::TreeBuilder;
 
 use crate::{
     column::Column,
-    common::{FieldDefinitionExpression, FieldValueExpression, Operator, TreeNode, Literal},
+    common::{FieldDefinitionExpression, FieldValueExpression, Literal, Operator, TreeNode},
+    compound_select::{CompoundSelectOperator, CompoundSelectStatement},
     condition::{ConditionBase, ConditionExpression, ConditionTree},
     join::{JoinClause, JoinCondition, JoinOperator, JoinRightHand},
     order::{OrderByClause, OrderType},
@@ -131,7 +132,7 @@ pub enum RelationalConditionExpression {
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub struct RelationalCondition {
-    pub condition: RelationalConditionExpression,
+    pub condition: ConditionExpression,
     pub schema: Schema,
 }
 
@@ -184,6 +185,44 @@ impl LogicalPlan for Relation {
             Relation::Grouping(group) => group.relation.schema(),
             Relation::Disticnt(rel) => rel.relation.schema(),
             Relation::Order(ord) => ord.relation.schema(),
+        }
+    }
+}
+
+impl From<(CompoundSelectStatement, Schema)> for Relation {
+    fn from(value: (CompoundSelectStatement, Schema)) -> Self {
+        match value.0.selects.len() {
+            0 => panic!("no select"),
+            1 => (value.0.selects[0].1.clone(), value.1.clone()).into(),
+            _ => {
+                let first = value.0.selects[0].clone();
+                value.0.selects.into_iter().skip(1).fold(
+                    (first.1, value.1.clone()).into(),
+                    |acc, x| {
+                        let left = acc.clone();
+                        let right = (x.1, value.1.clone()).into();
+                        match x.0 {
+                            Some(op) => match op {
+                                CompoundSelectOperator::Union => {
+                                    Relation::Union(Box::new(left), Box::new(right))
+                                }
+                                CompoundSelectOperator::Except => {
+                                    Relation::Difference(Box::new(left), Box::new(right))
+                                }
+                                CompoundSelectOperator::Intersect => {
+                                    Relation::Intersection(Box::new(left), Box::new(right))
+                                }
+                                CompoundSelectOperator::DistinctUnion => {
+                                    Relation::Disticnt(Box::new(Disticnt {
+                                        relation: Relation::Union(Box::new(left), Box::new(right)),
+                                    }))
+                                }
+                            },
+                            None => todo!(),
+                        }
+                    },
+                )
+            }
         }
     }
 }
