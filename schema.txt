@@ -1,2 +1,2 @@
 Student(ID, name)
-Takes(year)
+Takes(ID, year)

@@ -1,6 +1,6 @@
 use std::fmt;
 
-use nom::{IResult, branch::alt, combinator::{map, opt}, sequence::{preceded, delimited, tuple}, bytes::complete::{tag_no_case, tag}, character::complete::{multispace1, multispace0}, multi::{many1, many0}};
+use nom::{IResult, branch::alt, combinator::{map, opt}, sequence::{preceded, delimited, tuple}, bytes::complete::{tag_no_case, tag}, character::complete::{multispace1, multispace0}, multi::many0};
 
 use crate::{select::{SelectStatement, nested_select_statement}, order::{OrderByClause, order_by_clause}, common::{opt_delimited, statement_terminator, TreeNode}};
 

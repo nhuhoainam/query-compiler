@@ -89,7 +89,7 @@ pub enum Relation {
 }
 
 impl fmt::Display for Relation {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self {
             Relation::Base(_) => todo!(),
             Relation::Selection(_) => todo!(),

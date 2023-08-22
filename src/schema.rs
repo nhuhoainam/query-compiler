@@ -1,4 +1,3 @@
-use core::fmt;
 use std::{collections::BTreeMap, str::from_utf8};
 
 use nom::{
