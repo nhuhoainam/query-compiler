@@ -14,7 +14,8 @@ use crate::{
     arithmetic::{arithmetic_expression, ArithmeticExpression},
     column::Column,
     common::{
-        binary_comparison_operator, column_identifier, literal, value_list, Literal, Operator, TreeNode,
+        binary_comparison_operator, column_identifier, literal, opt_delimited, value_list, Literal,
+        Operator, TreeNode,
     },
     select::{nested_select_statement, SelectStatement},
 };
@@ -143,7 +144,11 @@ fn predicate(i: &[u8]) -> IResult<&[u8], ConditionExpression> {
         tuple((
             opt(delimited(multispace0, tag_no_case("not"), multispace1)),
             delimited(multispace0, tag_no_case("exists"), multispace0),
-            delimited(multispace0, nested_select_statement, multispace0),
+            opt_delimited(
+                tag("("),
+                delimited(multispace0, nested_select_statement, multispace0),
+                tag(")"),
+            ),
         )),
         |p| {
             let nested = ConditionExpression::ExistsOp(Box::new(p.2));
@@ -215,19 +220,20 @@ fn in_operation(i: &[u8]) -> IResult<&[u8], (Operator, ConditionExpression)> {
             alt((
                 map(
                     delimited(
-                        terminated(tag("("), multispace0), 
+                        terminated(tag("("), multispace0),
                         nested_select_statement,
-                        preceded(multispace0, tag(")"))
+                        preceded(multispace0, tag(")")),
                     ),
                     |s| ConditionBase::NestedSelect(Box::new(s)),
                 ),
-                map(delimited(
-                    terminated(tag("("), multispace0), 
-                    value_list, 
-                    preceded(multispace0, tag(")"))
-                ), |vs| {
-                    ConditionBase::LiteralList(vs)
-                }),
+                map(
+                    delimited(
+                        terminated(tag("("), multispace0),
+                        value_list,
+                        preceded(multispace0, tag(")")),
+                    ),
+                    |vs| ConditionBase::LiteralList(vs),
+                ),
             )),
         ),
         |p| {
@@ -312,8 +318,8 @@ fn simple_expr(i: &[u8]) -> IResult<&[u8], ConditionExpression> {
         }),
         map(
             delimited(
-                terminated(tag("("), multispace0), 
-                nested_select_statement, 
+                terminated(tag("("), multispace0),
+                nested_select_statement,
                 preceded(multispace0, tag(")")),
             ),
             |s| ConditionExpression::Base(ConditionBase::NestedSelect(Box::new(s))),
@@ -362,7 +368,12 @@ pub fn parenthesized_expr(i: &[u8]) -> IResult<&[u8], ConditionExpression> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{common::FieldDefinitionExpression, table::{Table, self}, select, column::FunctionExpression};
+    use crate::{
+        column::FunctionExpression,
+        common::FieldDefinitionExpression,
+        select,
+        table::{self, Table},
+    };
 
     use super::*;
 
@@ -643,14 +654,12 @@ mod tests {
         let res = condition_expr(cond.as_bytes());
 
         let nested_select = Box::new(SelectStatement {
-            sel_list: vec![
-                FieldDefinitionExpression::Column(Column { 
-                    name: "salary".to_string(), 
-                    alias: None, 
-                    table: None, 
-                    function: Some(Box::new(FunctionExpression::Max(Column::from("salary")))),
-                }),
-            ],
+            sel_list: vec![FieldDefinitionExpression::Column(Column {
+                name: "salary".to_string(),
+                alias: None,
+                table: None,
+                function: Some(Box::new(FunctionExpression::Max(Column::from("salary")))),
+            })],
             tables: vec![Table::from("Instructor")],
             ..Default::default()
         });
@@ -692,7 +701,9 @@ mod tests {
 
         let expected = ConditionExpression::ComparisonOp(ConditionTree {
             operator: Operator::NotIn,
-            left: Box::new(ConditionExpression::Base(ConditionBase::Field(Column::from("ID")))),
+            left: Box::new(ConditionExpression::Base(ConditionBase::Field(
+                Column::from("ID"),
+            ))),
             right: Box::new(ConditionExpression::Base(ConditionBase::NestedSelect(
                 nested_select,
             ))),
@@ -751,6 +762,22 @@ mod tests {
         assert_eq!(c1, expected1);
 
         let expected1 = "id NOT IN (1, 2)";
+        assert_eq!(format!("{}", c1), expected1);
+    }
+
+    #[test]
+    fn exists() {
+        let qs1 = b"exists (select * from foo)";
+        let res1 = condition_expr(qs1);
+
+        let c1 = res1.unwrap().1;
+        let expected1 = ConditionExpression::ExistsOp(Box::new(SelectStatement {
+            tables: vec![Table::from("foo")],
+            ..Default::default()
+        }));
+        assert_eq!(c1, expected1);
+
+        let expected1 = "EXISTS (SELECT * FROM foo)";
         assert_eq!(format!("{}", c1), expected1);
     }
 }
