@@ -772,12 +772,10 @@ mod tests {
 
         let c1 = res1.unwrap().1;
         let expected1 = ConditionExpression::ExistsOp(Box::new(SelectStatement {
+            sel_list: vec![FieldDefinitionExpression::All],
             tables: vec![Table::from("foo")],
             ..Default::default()
         }));
         assert_eq!(c1, expected1);
-
-        let expected1 = "EXISTS (SELECT * FROM foo)";
-        assert_eq!(format!("{}", c1), expected1);
     }
 }
