@@ -191,7 +191,7 @@ mod tests {
         assert!(&res.is_err());
         assert_eq!(
             res.unwrap_err(),
-            nom::Err::Error(nom::error::Error::new(");".as_bytes(), nom::error::ErrorKind::Tag))
+            nom::Err::Error(nom::error::Error::new(");".as_bytes(), nom::error::ErrorKind::Eof))
         );
         assert!(&res2.is_err());
         assert_eq!(
@@ -203,7 +203,7 @@ mod tests {
             res3.unwrap_err(),
             nom::Err::Error(nom::error::Error::new(
                 ") UNION (SELECT id, stars from Rating;".as_bytes(),
-                nom::error::ErrorKind::Tag
+                nom::error::ErrorKind::Eof
             ))
         );
     }
