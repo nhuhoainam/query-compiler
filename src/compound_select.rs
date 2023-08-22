@@ -31,7 +31,7 @@ pub struct CompoundSelectStatement {
 
 impl TreeNode for CompoundSelectStatement {
     fn populate(&self, parent: &debug_tree::TreeBuilder) {
-        let mut branch = parent.add_branch("<Query>");
+        // let mut branch = parent.add_branch("<Query>");
         for (ref op, ref sel) in &self.selects {
             if op.is_some() {
                 let mut branch = parent.add_branch(format!("{}", op.as_ref().unwrap()).as_str());
@@ -46,7 +46,7 @@ impl TreeNode for CompoundSelectStatement {
             }
             branch.release();
         }
-        branch.release();
+        // branch.release();
     }
 }
 

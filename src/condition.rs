@@ -142,7 +142,7 @@ fn predicate(i: &[u8]) -> IResult<&[u8], ConditionExpression> {
     let nested_exist = map(
         tuple((
             opt(delimited(multispace0, tag_no_case("not"), multispace1)),
-            delimited(multispace0, tag_no_case("exist"), multispace0),
+            delimited(multispace0, tag_no_case("exists"), multispace0),
             delimited(multispace0, nested_select_statement, multispace0),
         )),
         |p| {
