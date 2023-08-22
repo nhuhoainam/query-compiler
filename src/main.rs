@@ -2,7 +2,7 @@ use std::fs;
 
 use debug_tree::TreeBuilder;
 use query_compiler::{
-    common::TreeNode, logical_plan::Relation, schema::{Schema, schema},
+    common::TreeNode, logical_plan::Relation, schema::{Schema, schema, print_schema},
     compound_select::compound_selection,
 };
 
@@ -26,5 +26,7 @@ fn run_query() {
 
 fn get_schema() -> Schema {
     let input = fs::read_to_string("schema.txt").unwrap();
-    schema(input.as_bytes()).unwrap().1
+    let schema = schema(input.as_bytes()).unwrap().1;
+    print_schema(schema.clone());
+    schema
 }
