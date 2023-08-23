@@ -2,8 +2,10 @@ use std::fs;
 
 use debug_tree::TreeBuilder;
 use query_compiler::{
-    common::TreeNode, logical_plan::Relation, schema::{Schema, schema, print_schema},
+    common::TreeNode,
     compound_select::compound_selection,
+    logical_plan::Relation,
+    schema::{print_schema, schema, Schema},
 };
 
 fn main() {
@@ -19,6 +21,7 @@ fn run_query() {
     parse_tree.write("output_parse_tree.txt").ok();
     let schema = get_schema();
     let res: Relation = (parse, schema).into();
+    print!("{:#?}", res);
     let ra_tree = TreeBuilder::new();
     res.populate(&ra_tree);
     ra_tree.write("output_logical_plan.txt").ok();

@@ -127,7 +127,7 @@ pub enum RelationalConditionExpression {
     NegationOp(Box<RelationalConditionExpression>),
     Base(RelationalConditionBase),
     Arithmetic(Box<ArithmeticExpression>),
-    Bracketed(Box<RelationalConditionExpression>),
+    // Bracketed(Box<RelationalConditionExpression>),
     None,
 }
 
@@ -386,17 +386,21 @@ impl From<(ConditionExpression, Relation)> for RelationalConditionExpression {
             ConditionExpression::NegationOp(inner) => {
                 RelationalConditionExpression::NegationOp(Box::new((*inner, value.1).into()))
             }
-            ConditionExpression::ExistsOp(_) => todo!(),
-            ConditionExpression::Base(b) => RelationalConditionExpression::Base(match b {
-                ConditionBase::Field(col) => RelationalConditionBase::Field(col),
-                ConditionBase::Literal(lit) => RelationalConditionBase::Literal(lit),
-                ConditionBase::LiteralList(lits) => RelationalConditionBase::LiteralList(lits),
-                ConditionBase::NestedSelect(_) => todo!(),
-            }),
+            ConditionExpression::ExistsOp(_) => RelationalConditionExpression::None,
+            ConditionExpression::Base(b) => match b {
+                ConditionBase::Field(col) => {
+                    RelationalConditionExpression::Base(RelationalConditionBase::Field(col))
+                }
+                ConditionBase::Literal(lit) => {
+                    RelationalConditionExpression::Base(RelationalConditionBase::Literal(lit))
+                }
+                ConditionBase::LiteralList(lits) => {
+                    RelationalConditionExpression::Base(RelationalConditionBase::LiteralList(lits))
+                }
+                ConditionBase::NestedSelect(_) => RelationalConditionExpression::None,
+            },
             ConditionExpression::Arithmetic(ari) => RelationalConditionExpression::Arithmetic(ari),
-            ConditionExpression::Bracketed(br) => {
-                RelationalConditionExpression::Bracketed(Box::new((*br, value.1).into()))
-            }
+            ConditionExpression::Bracketed(br) => (*br, value.1).into(),
         }
     }
 }
@@ -417,26 +421,89 @@ impl From<(ConditionExpression, Relation, RelationalCondition, Schema)> for Sele
                     schema: value.3,
                 },
             },
-            ConditionExpression::LogicalOp(cond_tree) => Selection {
-                relation: value.1.clone(),
-                condition: RelationalCondition {
-                    condition: RelationalConditionExpression::LogicalOp(RelationalConditionTree {
-                        operator: cond_tree.operator,
-                        left: Box::new((*cond_tree.left, value.1.clone()).into()),
-                        right: Box::new((*cond_tree.right, value.1.clone()).into()),
-                    }),
-                    schema: value.3,
-                },
-            },
-            ConditionExpression::NegationOp(inner) => Selection {
-                relation: value.1.clone(),
-                condition: RelationalCondition {
-                    condition: RelationalConditionExpression::NegationOp(Box::new(
-                        (*inner, value.1.clone()).into(),
-                    )),
-                    schema: value.3,
-                },
-            },
+            ConditionExpression::LogicalOp(cond_tree) => {
+                let left: RelationalConditionExpression =
+                    (*cond_tree.left.clone(), value.1.clone()).into();
+                let right: RelationalConditionExpression =
+                    (*cond_tree.right.clone(), value.1.clone()).into();
+                let left_rel: Option<Relation> = match left {
+                    RelationalConditionExpression::None => Some(
+                        Selection::from((
+                            *cond_tree.left.clone(),
+                            value.1.clone(),
+                            value.2.clone(),
+                            value.3.clone(),
+                        ))
+                        .relation,
+                    ),
+                    _ => None,
+                };
+                let right_rel: Option<Relation> = match right {
+                    RelationalConditionExpression::None => Some(
+                        Selection::from((
+                            *cond_tree.right.clone(),
+                            value.1.clone(),
+                            value.2.clone(),
+                            value.3.clone(),
+                        ))
+                        .relation,
+                    ),
+                    _ => None,
+                };
+                match (left_rel, right_rel) {
+                    (None, None) => Selection {
+                        relation: value.1.clone(),
+                        condition: RelationalCondition {
+                            condition: RelationalConditionExpression::LogicalOp(
+                                RelationalConditionTree {
+                                    operator: cond_tree.operator,
+                                    left: Box::new((*cond_tree.left, value.1.clone()).into()),
+                                    right: Box::new((*cond_tree.right, value.1.clone()).into()),
+                                },
+                            ),
+                            schema: value.3,
+                        },
+                    },
+                    (None, Some(r)) => Selection {
+                        relation: r,
+                        condition: RelationalCondition {
+                            condition: left,
+                            schema: value.3,
+                        },
+                    },
+                    (Some(l), None) => Selection {
+                        relation: l,
+                        condition: RelationalCondition {
+                            condition: right,
+                            schema: value.3,
+                        },
+                    },
+                    (Some(l), Some(r)) => Selection {
+                        relation: Relation::Join(
+                            Box::new(l),
+                            Box::new(r),
+                            JoinOperator::Natural,
+                            None,
+                        ),
+                        condition: RelationalCondition {
+                            condition: RelationalConditionExpression::None,
+                            schema: value.3,
+                        },
+                    },
+                }
+            }
+            ConditionExpression::NegationOp(inner) => {
+                let inner_cond: RelationalConditionExpression =
+                    (*inner.clone(), value.1.clone()).into();
+                match inner_cond {
+                    RelationalConditionExpression::None => {
+                        Selection::from((*inner, value.1.clone(), value.2.clone(), value.3.clone()))
+                            .relation
+                    }
+                    _ => todo!(),
+                };
+                todo!()
+            }
             ConditionExpression::ExistsOp(nested) => {
                 let rel = value.1.clone();
                 let select: Relation = (*nested, value.3.clone()).into();
@@ -510,15 +577,7 @@ impl From<(ConditionExpression, Relation, RelationalCondition, Schema)> for Sele
                     schema: value.3,
                 },
             },
-            ConditionExpression::Bracketed(br) => Selection {
-                relation: value.1.clone(),
-                condition: RelationalCondition {
-                    condition: RelationalConditionExpression::Bracketed(Box::new(
-                        (*br, value.1.clone()).into(),
-                    )),
-                    schema: value.3,
-                },
-            },
+            ConditionExpression::Bracketed(br) => (*br, value.1, value.2, value.3).into(),
         }
     }
 }
@@ -740,11 +799,11 @@ impl TreeNode for RelationalConditionExpression {
             }
             RelationalConditionExpression::Base(base) => base.populate(parent),
             RelationalConditionExpression::Arithmetic(exp) => exp.populate(parent),
-            RelationalConditionExpression::Bracketed(inner) => {
-                let mut branch = parent.add_branch("()");
-                inner.populate(parent);
-                branch.release();
-            }
+            // RelationalConditionExpression::Bracketed(inner) => {
+            //     let mut branch = parent.add_branch("()");
+            //     inner.populate(parent);
+            //     branch.release();
+            // }
             RelationalConditionExpression::None => todo!(),
         }
     }
@@ -764,7 +823,7 @@ impl fmt::Display for RelationalConditionExpression {
             RelationalConditionExpression::NegationOp(c) => write!(f, "NOT {}", c),
             RelationalConditionExpression::Base(b) => write!(f, "{}", b),
             RelationalConditionExpression::Arithmetic(a) => write!(f, "{}", a),
-            RelationalConditionExpression::Bracketed(c) => write!(f, "({})", c),
+            // RelationalConditionExpression::Bracketed(c) => write!(f, "({})", c),
             RelationalConditionExpression::None => Ok(()),
         }
     }

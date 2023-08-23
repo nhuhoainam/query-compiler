@@ -76,6 +76,7 @@ pub enum JoinOperator {
     FullOuter,
     Cross,
     Natural,
+    Anti,
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
@@ -158,6 +159,7 @@ impl fmt::Display for JoinOperator {
             JoinOperator::FullOuter => write!(f, "FULL OUTER JOIN"),
             JoinOperator::Cross => write!(f, "CROSS JOIN"),
             JoinOperator::Natural => write!(f, "NATURAL JOIN"),
+            JoinOperator::Anti => write!(f, "ANTI JOIN"),
         }
     }
 }
