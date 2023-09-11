@@ -51,6 +51,14 @@ pub struct Rename {
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+pub struct Join {
+    pub left: Relation,
+    pub right: Relation,
+    pub operator: JoinOperator,
+    pub condition: Option<RelationalCondition>,
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub struct Grouping {
     pub relation: Relation,
     pub columns: Vec<Column>,
@@ -74,12 +82,7 @@ pub enum Relation {
     Selection(Box<Selection>),
     Projection(Box<Projection>),
     Rename(Box<Rename>),
-    Join(
-        Box<Relation>,
-        Box<Relation>,
-        JoinOperator,
-        Option<RelationalCondition>,
-    ),
+    Join(Box<Join>),
     Grouping(Box<Grouping>),
     Order(Box<Order>),
     Disticnt(Box<Disticnt>),
@@ -95,7 +98,7 @@ impl fmt::Display for Relation {
             Relation::Selection(_) => todo!(),
             Relation::Projection(_) => todo!(),
             Relation::Rename(_) => todo!(),
-            Relation::Join(_, _, _, _) => todo!(),
+            Relation::Join(_) => todo!(),
             Relation::Grouping(_) => todo!(),
             Relation::Disticnt(_) => todo!(),
             Relation::Union(_, _) => todo!(),
@@ -159,9 +162,9 @@ impl LogicalPlan for Relation {
                     _ => unimplemented!("rename more than one table"),
                 }
             }
-            Relation::Join(left, right, _, _) => {
-                let mut left = left.schema();
-                let mut right = right.schema();
+            Relation::Join(join) => {
+                let mut left = join.left.schema();
+                let mut right = join.right.schema();
                 left.append(&mut right);
                 left
             }
@@ -479,12 +482,12 @@ impl From<(ConditionExpression, Relation, RelationalCondition, Schema)> for Sele
                         },
                     },
                     (Some(l), Some(r)) => Selection {
-                        relation: Relation::Join(
-                            Box::new(l),
-                            Box::new(r),
-                            JoinOperator::Natural,
-                            None,
-                        ),
+                        relation: Relation::Join(Box::new(Join {
+                            left: l,
+                            right: r,
+                            operator: JoinOperator::Natural,
+                            condition: None,
+                        })),
                         condition: RelationalCondition {
                             condition: RelationalConditionExpression::None,
                             schema: value.3,
@@ -509,21 +512,21 @@ impl From<(ConditionExpression, Relation, RelationalCondition, Schema)> for Sele
                 let select: Relation = (*nested, value.3.clone()).into();
                 match rel {
                     Relation::Selection(sel) => Selection {
-                        relation: Relation::Join(
-                            Box::new(sel.relation),
-                            Box::new(select),
-                            JoinOperator::Natural,
-                            None,
-                        ),
+                        relation: Relation::Join(Box::new(Join {
+                            left: sel.relation,
+                            right: select,
+                            operator: JoinOperator::Natural,
+                            condition: None,
+                        })),
                         condition: sel.condition,
                     },
                     _ => Selection {
-                        relation: Relation::Join(
-                            Box::new(rel),
-                            Box::new(select),
-                            JoinOperator::Natural,
-                            None,
-                        ),
+                        relation: Relation::Join(Box::new(Join {
+                            left: rel,
+                            right: select,
+                            operator: JoinOperator::Natural,
+                            condition: None,
+                        })),
                         condition: RelationalCondition {
                             condition: RelationalConditionExpression::None,
                             schema: value.3,
@@ -642,15 +645,15 @@ impl
                             }
                             None => (),
                         }
-                        Relation::Join(
-                            Box::new(acc),
-                            Box::new(Relation::Base(RelationBase {
+                        Relation::Join(Box::new(Join {
+                            left: acc,
+                            right: Relation::Base(RelationBase {
                                 name: table.name.clone(),
                                 columns: schema.get(&table.name).unwrap().clone(), // TODO: handle None
-                            })),
-                            JoinOperator::Cross,
-                            None,
-                        )
+                            }),
+                            operator: JoinOperator::Cross,
+                            condition: None,
+                        }))
                     },
                 )
             }
@@ -686,15 +689,15 @@ impl
                                 }
                                 None => (),
                             }
-                            Relation::Join(
-                                Box::new(acc),
-                                Box::new(Relation::Base(RelationBase {
+                            Relation::Join(Box::new(Join {
+                                left: acc,
+                                right: Relation::Base(RelationBase {
                                     name: table.name.clone(),
                                     columns: schema.get(&table.name).unwrap().clone(), // TODO: handle None
-                                })),
-                                JoinOperator::Cross,
-                                None,
-                            )
+                                }),
+                                operator: JoinOperator::Cross,
+                                condition: None,
+                            }))
                         },
                     )
                 }
@@ -716,12 +719,12 @@ impl
                 JoinRightHand::NestedJoin(_) => todo!(),
             };
             let join_con = (x.constraint, right_hand.clone(), schema.clone()).into();
-            Relation::Join(
-                Box::new(acc),
-                Box::new(right_hand),
-                x.operator,
-                Some(join_con),
-            )
+            Relation::Join(Box::new(Join {
+                left: acc,
+                right: right_hand,
+                operator: x.operator,
+                condition: Some(join_con),
+            }))
         });
 
         match value.2 {
@@ -892,8 +895,11 @@ impl TreeNode for Relation {
                 rename.relation.populate(parent);
                 branch.release();
             }
-            Relation::Join(left, right, op, con) => {
-                let mut join = format!("{} ", op);
+            Relation::Join(j) => {
+                let left = &j.left;
+                let right = &j.right;
+                let con = &j.condition;
+                let mut join = format!("{} ", j.operator);
                 if let Some(con) = con {
                     join = join + &con.condition.to_string();
                 }
@@ -1167,8 +1173,8 @@ mod tests {
         let schema = get_schema();
         let logical_plan: Relation = (parse_tree, schema.clone()).into();
         let expected = Relation::Projection(Box::new(Projection {
-            relation: Relation::Join(
-                Box::new(Relation::Base(RelationBase {
+            relation: Relation::Join(Box::new(Join {
+                left: Relation::Base(RelationBase {
                     name: "table1".to_string(),
                     columns: vec![
                         Column {
@@ -1184,8 +1190,8 @@ mod tests {
                             function: None,
                         },
                     ],
-                })),
-                Box::new(Relation::Base(RelationBase {
+                }),
+                right: Relation::Base(RelationBase {
                     name: "table2".to_string(),
                     columns: vec![
                         Column {
@@ -1201,10 +1207,10 @@ mod tests {
                             function: None,
                         },
                     ],
-                })),
-                JoinOperator::Cross,
-                None,
-            ),
+                }),
+                operator: JoinOperator::Cross,
+                condition: None,
+            })),
             values: vec![
                 ProjectionValue::Column(Column {
                     name: "column1".to_string(),
@@ -1239,8 +1245,8 @@ mod tests {
         let logical_plan: Relation = (parse_tree, schema.clone()).into();
         let expected = Relation::Projection(Box::new(Projection {
             relation: Relation::Selection(Box::new(Selection {
-                relation: Relation::Join(
-                    Box::new(Relation::Base(RelationBase {
+                relation: Relation::Join(Box::new(Join {
+                    left: Relation::Base(RelationBase {
                         name: "table1".to_string(),
                         columns: vec![
                             Column {
@@ -1256,8 +1262,8 @@ mod tests {
                                 function: None,
                             },
                         ],
-                    })),
-                    Box::new(Relation::Base(RelationBase {
+                    }),
+                    right: Relation::Base(RelationBase {
                         name: "table2".to_string(),
                         columns: vec![
                             Column {
@@ -1273,10 +1279,10 @@ mod tests {
                                 function: None,
                             },
                         ],
-                    })),
-                    JoinOperator::Cross,
-                    None,
-                ),
+                    }),
+                    operator: JoinOperator::Cross,
+                    condition: None,
+                })),
                 condition: RelationalCondition {
                     condition: RelationalConditionExpression::ComparisonOp(
                         RelationalConditionTree {
