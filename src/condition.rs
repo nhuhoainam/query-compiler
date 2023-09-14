@@ -68,7 +68,7 @@ impl ConditionExpression {
             ConditionExpression::NotExistsOp(s) => ConditionExpression::ExistsOp(s),
             ConditionExpression::Base(b) => ConditionExpression::Base(b),
             ConditionExpression::Arithmetic(a) => ConditionExpression::Arithmetic(a),
-            ConditionExpression::Bracketed(c) => ConditionExpression::Bracketed(c),
+            ConditionExpression::Bracketed(c) => ConditionExpression::Bracketed(Box::new(c.negate())),
         }
     }
 }

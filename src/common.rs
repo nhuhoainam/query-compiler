@@ -131,8 +131,8 @@ impl Operator {
             Operator::In => Operator::NotIn,
             Operator::NotIn => Operator::In,
             Operator::Is => panic!("Cannot negate IS operator"),
-            Operator::And => panic!("Cannot negate AND operator"),
-            Operator::Or => panic!("Cannot negate OR operator"),
+            Operator::And => Operator::Or, // need to negate left and right
+            Operator::Or => Operator::And, // need to negate left and right
             Operator::All(inner) => Operator::All(Box::new(inner.negate())),
             Operator::Any(inner) => Operator::Any(Box::new(inner.negate())),
         }
