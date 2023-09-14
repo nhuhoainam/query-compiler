@@ -57,11 +57,13 @@ impl ConditionExpression {
                     right: c.right,
                 })
             }
-            ConditionExpression::LogicalOp(c) => ConditionExpression::LogicalOp(ConditionTree {
-                operator: c.operator.negate(),
-                left: c.left,
-                right: c.right,
-            }),
+            ConditionExpression::LogicalOp(c) => ConditionExpression::LogicalOp(
+                ConditionTree {
+                    operator: c.operator.negate(),
+                    left: Box::new(c.left.negate()),
+                    right: Box::new(c.right.negate()),
+                }
+            ),
             ConditionExpression::ExistsOp(s) => ConditionExpression::NotExistsOp(s),
             ConditionExpression::NotExistsOp(s) => ConditionExpression::ExistsOp(s),
             ConditionExpression::Base(b) => ConditionExpression::Base(b),
