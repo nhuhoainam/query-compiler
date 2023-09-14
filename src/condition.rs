@@ -39,11 +39,36 @@ pub struct ConditionTree {
 pub enum ConditionExpression {
     ComparisonOp(ConditionTree),
     LogicalOp(ConditionTree),
-    NegationOp(Box<ConditionExpression>),
+    // NegationOp(Box<ConditionExpression>),
     ExistsOp(Box<SelectStatement>),
+    NotExistsOp(Box<SelectStatement>),
     Base(ConditionBase),
     Arithmetic(Box<ArithmeticExpression>),
     Bracketed(Box<ConditionExpression>),
+}
+
+impl ConditionExpression {
+    pub fn negate(self) -> Self {
+        match self {
+            ConditionExpression::ComparisonOp(c) => {
+                ConditionExpression::ComparisonOp(ConditionTree {
+                    operator: c.operator.negate(),
+                    left: c.left,
+                    right: c.right,
+                })
+            }
+            ConditionExpression::LogicalOp(c) => ConditionExpression::LogicalOp(ConditionTree {
+                operator: c.operator.negate(),
+                left: c.left,
+                right: c.right,
+            }),
+            ConditionExpression::ExistsOp(s) => ConditionExpression::NotExistsOp(s),
+            ConditionExpression::NotExistsOp(s) => ConditionExpression::ExistsOp(s),
+            ConditionExpression::Base(b) => ConditionExpression::Base(b),
+            ConditionExpression::Arithmetic(a) => ConditionExpression::Arithmetic(a),
+            ConditionExpression::Bracketed(c) => ConditionExpression::Bracketed(c),
+        }
+    }
 }
 
 impl TreeNode for ConditionExpression {
@@ -61,13 +86,18 @@ impl TreeNode for ConditionExpression {
                 c.right.populate(parent);
                 branch.release();
             }
-            ConditionExpression::NegationOp(c) => {
-                let mut branch = parent.add_branch("NOT");
-                c.populate(parent);
-                branch.release();
-            }
+            // ConditionExpression::NegationOp(c) => {
+            //     let mut branch = parent.add_branch("NOT");
+            //     c.populate(parent);
+            //     branch.release();
+            // }
             ConditionExpression::ExistsOp(s) => {
                 let mut branch = parent.add_branch("EXISTS");
+                s.populate(parent);
+                branch.release();
+            }
+            ConditionExpression::NotExistsOp(s) => {
+                let mut branch = parent.add_branch("NOT EXISTS");
                 s.populate(parent);
                 branch.release();
             }
@@ -130,8 +160,9 @@ impl fmt::Display for ConditionExpression {
         match self {
             ConditionExpression::ComparisonOp(c) => write!(f, "{}", c),
             ConditionExpression::LogicalOp(c) => write!(f, "{}", c),
-            ConditionExpression::NegationOp(c) => write!(f, "NOT {}", c),
+            // ConditionExpression::NegationOp(c) => write!(f, "NOT {}", c),
             ConditionExpression::ExistsOp(s) => write!(f, "EXISTS {}", s),
+            ConditionExpression::NotExistsOp(s) => write!(f, "NOT EXISTS {}", s),
             ConditionExpression::Base(b) => write!(f, "{}", b),
             ConditionExpression::Arithmetic(a) => write!(f, "{}", a),
             ConditionExpression::Bracketed(c) => write!(f, "({})", c),
@@ -153,7 +184,7 @@ fn predicate(i: &[u8]) -> IResult<&[u8], ConditionExpression> {
         |p| {
             let nested = ConditionExpression::ExistsOp(Box::new(p.2));
             match p.0 {
-                Some(_) => ConditionExpression::NegationOp(Box::new(nested)),
+                Some(_) => nested.negate(),
                 None => nested,
             }
         },
@@ -166,7 +197,7 @@ pub fn not_expr(i: &[u8]) -> IResult<&[u8], ConditionExpression> {
     alt((
         map(
             preceded(pair(tag_no_case("not"), multispace1), parenthesized_expr),
-            |right| ConditionExpression::NegationOp(Box::new(right)),
+            |right| right.negate(),
         ),
         boolean_primary,
     ))(i)

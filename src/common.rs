@@ -117,6 +117,28 @@ pub struct LiteralExpression {
     pub alias: Option<String>,
 }
 
+impl Operator {
+    pub fn negate(self) -> Operator {
+        match self {
+            Operator::Equal => Operator::NotEqual,
+            Operator::NotEqual => Operator::Equal,
+            Operator::Less => Operator::GreaterOrEqual,
+            Operator::LessOrEqual => Operator::Greater,
+            Operator::Greater => Operator::LessOrEqual,
+            Operator::GreaterOrEqual => Operator::Less,
+            Operator::Like => Operator::NotLike,
+            Operator::NotLike => Operator::Like,
+            Operator::In => Operator::NotIn,
+            Operator::NotIn => Operator::In,
+            Operator::Is => panic!("Cannot negate IS operator"),
+            Operator::And => panic!("Cannot negate AND operator"),
+            Operator::Or => panic!("Cannot negate OR operator"),
+            Operator::All(inner) => Operator::All(Box::new(inner.negate())),
+            Operator::Any(inner) => Operator::Any(Box::new(inner.negate())),
+        }
+    }
+}
+
 impl TreeNode for LiteralExpression {
     fn populate(&self, parent: &TreeBuilder) {
         match self.alias {
