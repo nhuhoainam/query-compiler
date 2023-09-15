@@ -14,8 +14,6 @@ pub enum FunctionExpression {
     Sum(FunctionArgument, bool),
     Max(FunctionArgument),
     Min(FunctionArgument),
-    GroupConcat(FunctionArgument, String),
-    Generic(String, FunctionArguments),
 }
 
 impl fmt::Display for FunctionExpression {
@@ -26,11 +24,7 @@ impl fmt::Display for FunctionExpression {
             FunctionExpression::CountStar => write!(f, "*"),
             FunctionExpression::Sum(ref col, _) => write!(f, "{}", col),
             FunctionExpression::Max(ref col) => write!(f, "{}", col),
-            FunctionExpression::Min(ref col) => write!(f, "{}", col),
-            FunctionExpression::GroupConcat(ref col, ref s) => {
-                write!(f, "group_concat({}, {})", col, s)
-            }
-            FunctionExpression::Generic(ref name, ref args) => write!(f, "{}({})", name, args),
+            FunctionExpression::Min(ref col) => write!(f, "{}", col)
         }
     }
 }

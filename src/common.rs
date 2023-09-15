@@ -3,18 +3,21 @@ use nom::{
     branch::alt,
     bytes::complete::{is_not, tag, tag_no_case, take, take_while1},
     character::{
-        complete::{digit1, line_ending, multispace0, multispace1, alphanumeric1},
+        complete::{digit1, line_ending, multispace0, multispace1},
         is_alphanumeric,
     },
     combinator::{map, not, opt, peek},
     error::{ErrorKind, ParseError},
-    multi::{fold_many0, many0, separated_list0},
-    sequence::{delimited, pair, preceded, terminated, tuple, separated_pair},
+    multi::{fold_many0, many0},
+    sequence::{delimited, pair, preceded, separated_pair, terminated, tuple},
     IResult, InputLength, Parser,
 };
 
 use crate::{
-    arithmetic::ArithmeticExpression, column::{Column, FunctionExpression, FunctionArgument, FunctionArguments}, keywords::sql_keywords, table::Table,
+    arithmetic::ArithmeticExpression,
+    column::{Column, FunctionArgument, FunctionExpression},
+    keywords::sql_keywords,
+    table::Table,
 };
 use std::{
     fmt::{self},
@@ -298,7 +301,7 @@ pub fn column_identifier_no_alias(i: &[u8]) -> IResult<&[u8], Column> {
                 Some(t) => Some(str::from_utf8(t).unwrap().to_string()),
             },
             function: None,
-        })
+        }),
     ))(i)
 }
 
@@ -311,33 +314,33 @@ pub fn function_argument_parser(i: &[u8]) -> IResult<&[u8], FunctionArgument> {
 // present.
 pub fn function_arguments(i: &[u8]) -> IResult<&[u8], (FunctionArgument, bool)> {
     let distinct_parser = opt(tuple((tag_no_case("distinct"), multispace1)));
-    let (remaining_input, (distinct, args)) = tuple((distinct_parser, function_argument_parser))(i)?;
+    let (remaining_input, (distinct, args)) =
+        tuple((distinct_parser, function_argument_parser))(i)?;
     Ok((remaining_input, (args, distinct.is_some())))
-}
-
-fn group_concat_fx_helper(i: &[u8]) -> IResult<&[u8], &[u8]> {
-    let ws_sep = preceded(multispace0, tag_no_case("separator"));
-    let (remaining_input, sep) = delimited(
-        ws_sep,
-        delimited(tag("'"), opt(alphanumeric1), tag("'")),
-        multispace0,
-    )(i)?;
-
-    Ok((remaining_input, sep.unwrap_or(&[0u8; 0])))
-}
-
-fn group_concat_fx(i: &[u8]) -> IResult<&[u8], (Column, Option<&[u8]>)> {
-    pair(column_identifier_no_alias, opt(group_concat_fx_helper))(i)
 }
 
 fn delim_fx_args(i: &[u8]) -> IResult<&[u8], (FunctionArgument, bool)> {
     delimited(tag("("), function_arguments, tag(")"))(i)
 }
 
+fn count_star(i: &[u8]) -> IResult<&[u8], FunctionExpression> {
+    map(
+        separated_pair(
+            tag_no_case("count"),
+            multispace0,
+            delimited(
+                tag("("),
+                delimited(multispace0, tag("*"), multispace0),
+                tag(")"),
+            ),
+        ),
+        |_| FunctionExpression::CountStar,
+    )(i)
+}
+
 pub fn column_function(i: &[u8]) -> IResult<&[u8], FunctionExpression> {
-    let delim_group_concat_fx = delimited(tag("("), group_concat_fx, tag(")"));
     alt((
-        map(tag_no_case("count(*)"), |_| FunctionExpression::CountStar),
+        count_star,
         map(preceded(tag_no_case("count"), delim_fx_args), |args| {
             FunctionExpression::Count(args.0.clone(), args.1)
         }),
@@ -353,23 +356,6 @@ pub fn column_function(i: &[u8]) -> IResult<&[u8], FunctionExpression> {
         map(preceded(tag_no_case("min"), delim_fx_args), |args| {
             FunctionExpression::Min(args.0.clone())
         }),
-        map(
-            preceded(tag_no_case("group_concat"), delim_group_concat_fx),
-            |spec| {
-                let (ref col, ref sep) = spec;
-                let sep = match *sep {
-                    None => String::from(","),
-                    Some(s) => String::from_utf8(s.to_vec()).unwrap(),
-                };
-                FunctionExpression::GroupConcat(col.clone(), sep)
-            },
-        ),
-        map(tuple((sql_identifier, multispace0, tag("("), separated_list0(tag(","), delimited(multispace0, function_argument_parser, multispace0)), tag(")"))), |tuple| {
-            let (name, _, _, arguments, _) = tuple;
-            FunctionExpression::Generic(
-                str::from_utf8(name).unwrap().to_string(), 
-                FunctionArguments::from(arguments))
-        })
     ))(i)
 }
 
@@ -454,22 +440,24 @@ pub fn binary_comparison_operator(i: &[u8]) -> IResult<&[u8], Operator> {
     alt((
         map(tag_no_case("and"), |_| Operator::And),
         map(tag_no_case("or"), |_| Operator::Or),
-        map(separated_pair(
-            binary_comparison_helper,
-            multispace0,
-            opt(alt((
-                delimited(multispace0, tag_no_case("all"), multispace0), 
-                delimited(multispace0, tag_no_case("any"), multispace0),
-            ))
-        )), |(op, quantifier)| 
-            match quantifier {
+        map(
+            separated_pair(
+                binary_comparison_helper,
+                multispace0,
+                opt(alt((
+                    delimited(multispace0, tag_no_case("all"), multispace0),
+                    delimited(multispace0, tag_no_case("any"), multispace0),
+                ))),
+            ),
+            |(op, quantifier)| match quantifier {
                 Some(b) => match str::from_utf8(b).unwrap().to_lowercase().as_str() {
                     "all" => Operator::All(Box::new(op)),
                     "any" => Operator::Any(Box::new(op)),
                     e => panic!("Error parsing quantifier: {:?}", e),
                 },
                 None => op,
-            }),
+            },
+        ),
         map(tag_no_case("not like"), |_| Operator::NotLike),
         map(tag_no_case("in"), |_| Operator::In),
         map(tag_no_case("not in"), |_| Operator::NotIn),
