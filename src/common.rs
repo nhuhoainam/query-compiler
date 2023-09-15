@@ -25,7 +25,7 @@ pub trait TreeNode {
     fn populate(&self, parent: &TreeBuilder);
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum FieldDefinitionExpression {
     All,
     AllFromTable(Table),
@@ -46,7 +46,7 @@ impl TreeNode for FieldDefinitionExpression {
     }
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum FieldValueExpression {
     Arithmetic(ArithmeticExpression),
     Literal(LiteralExpression),
@@ -70,7 +70,7 @@ impl fmt::Display for FieldValueExpression {
     }
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Operator {
     And,
     Or,
@@ -89,13 +89,13 @@ pub enum Operator {
     Is,
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Real {
     pub integral: i32,
     pub fractional: i32,
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Literal {
     Null,
     String(String),
@@ -111,7 +111,7 @@ impl From<i64> for Literal {
     }
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct LiteralExpression {
     pub value: Literal,
     pub alias: Option<String>,

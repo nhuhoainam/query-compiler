@@ -24,13 +24,13 @@ use crate::{
     table::Table,
 };
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct GroupByClause {
     pub columns: Vec<Column>,
     pub having: Option<ConditionExpression>,
 }
 
-#[derive(Clone, Debug, Default, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
 pub struct SelectStatement {
     pub distinct: bool,
     pub sel_list: Vec<FieldDefinitionExpression>,

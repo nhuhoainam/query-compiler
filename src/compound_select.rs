@@ -4,7 +4,7 @@ use nom::{IResult, branch::alt, combinator::{map, opt}, sequence::{preceded, del
 
 use crate::{select::{SelectStatement, nested_select_statement}, order::{OrderByClause, order_by_clause}, common::{opt_delimited, statement_terminator, TreeNode}};
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Deserialize, Serialize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum CompoundSelectOperator {
     Union,
     DistinctUnion,
@@ -23,7 +23,7 @@ impl fmt::Display for CompoundSelectOperator {
     }
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Deserialize, Serialize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct CompoundSelectStatement {
     pub selects: Vec<(Option<CompoundSelectOperator>, SelectStatement)>,
     pub order: Option<OrderByClause>,

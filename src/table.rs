@@ -5,7 +5,7 @@ use debug_tree::TreeBuilder;
 
 use crate::common::TreeNode;
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Table {
     pub name: String,
     pub alias: Option<String>,

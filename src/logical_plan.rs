@@ -19,18 +19,18 @@ pub trait LogicalPlan {
     fn schema(&self) -> Schema;
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Disticnt {
     pub relation: Relation,
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Selection {
     pub relation: Relation,
     pub condition: RelationalCondition,
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Projection {
     pub relation: Relation,
     pub values: ProjectionList,
@@ -38,19 +38,19 @@ pub struct Projection {
 
 pub type ProjectionList = Vec<ProjectionValue>;
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum ProjectionValue {
     Column(Column),
     Expression(FieldValueExpression),
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Rename {
     pub relation: Relation,
     pub alias: String,
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Join {
     pub left: Relation,
     pub right: Relation,
@@ -58,25 +58,25 @@ pub struct Join {
     pub condition: Option<RelationalCondition>,
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Grouping {
     pub relation: Relation,
     pub columns: Vec<Column>,
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Order {
     pub relation: Relation,
     pub columns: Vec<(Column, OrderType)>,
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct RelationBase {
     pub name: String,
     pub columns: Vec<Column>,
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Relation {
     Base(RelationBase),
     Selection(Box<Selection>),
@@ -109,21 +109,21 @@ impl fmt::Display for Relation {
     }
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum RelationalConditionBase {
     Field(Column),
     Literal(Literal),
     LiteralList(Vec<Literal>),
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct RelationalConditionTree {
     pub operator: Operator,
     pub left: Box<RelationalConditionExpression>,
     pub right: Box<RelationalConditionExpression>,
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum RelationalConditionExpression {
     ComparisonOp(RelationalConditionTree),
     LogicalOp(RelationalConditionTree),
@@ -134,7 +134,7 @@ pub enum RelationalConditionExpression {
     None,
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct RelationalCondition {
     pub condition: RelationalConditionExpression,
     pub schema: Schema,

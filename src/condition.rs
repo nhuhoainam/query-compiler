@@ -20,7 +20,7 @@ use crate::{
     select::{nested_select_statement, SelectStatement},
 };
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum ConditionBase {
     Field(Column),
     Literal(Literal),
@@ -28,14 +28,14 @@ pub enum ConditionBase {
     NestedSelect(Box<SelectStatement>),
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct ConditionTree {
     pub operator: Operator,
     pub left: Box<ConditionExpression>,
     pub right: Box<ConditionExpression>,
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum ConditionExpression {
     ComparisonOp(ConditionTree),
     LogicalOp(ConditionTree),

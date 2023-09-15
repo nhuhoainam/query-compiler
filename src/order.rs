@@ -4,7 +4,7 @@ use nom::{branch::alt, combinator::{map, opt}, bytes::complete::tag_no_case, IRe
 
 use crate::{column::Column, keywords::escape_if_keyword, common::{column_identifier_no_alias, ws_sep_comma}};
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum OrderType {
     Ascending,
     Descending,
@@ -19,7 +19,7 @@ impl fmt::Display for OrderType {
     }
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct OrderByClause {
     pub columns: Vec<(Column, OrderType)>,
 }

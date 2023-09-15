@@ -16,7 +16,7 @@ use crate::{
     common::{as_alias, column_identifier_no_alias, integer_literal, Literal, TreeNode},
 };
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Arithmetic {
     Base(ArithmeticBase),
     Expr {
@@ -26,20 +26,14 @@ pub enum Arithmetic {
     },
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum ArithmeticBase {
     Column(Column),
     Scalar(Literal),
     Bracketed(Box<Arithmetic>),
 }
 
-// #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize, DisplayTree)]
-// pub enum ArithmeticOperand {
-//     Base(ArithmeticBase),
-//     Expression(Box<Arithmetic>),
-// }
-
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum ArithmeticOperator {
     Add,
     Subtract,
@@ -47,7 +41,7 @@ pub enum ArithmeticOperator {
     Divide,
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct ArithmeticExpression {
     pub ari: Arithmetic,
     pub alias: Option<String>,

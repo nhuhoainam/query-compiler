@@ -18,7 +18,7 @@ use crate::{
     table::Table,
 };
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct JoinClause {
     pub operator: JoinOperator,
     pub right: JoinRightHand,
@@ -34,7 +34,7 @@ impl TreeNode for JoinClause {
     }
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum JoinRightHand {
     Table(Table),
     // A comma-separated (and implicitly joined) sequence of tables.
@@ -68,7 +68,7 @@ impl TreeNode for JoinRightHand {
     }
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum JoinOperator {
     Inner,
     LeftOuter,
@@ -79,7 +79,7 @@ pub enum JoinOperator {
     Anti,
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum JoinCondition {
     On(ConditionExpression),
     Using(Vec<Column>),

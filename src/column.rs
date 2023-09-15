@@ -6,7 +6,7 @@ use crate::{common::TreeNode, keywords::escape_if_keyword};
 
 pub type FunctionArgument = Column;
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum FunctionExpression {
     Avg(FunctionArgument, bool),
     Count(FunctionArgument, bool),
@@ -31,25 +31,11 @@ impl fmt::Display for FunctionExpression {
                 write!(f, "group_concat({}, {})", col, s)
             }
             FunctionExpression::Generic(ref name, ref args) => write!(f, "{}({})", name, args),
-            // FunctionExpression::Avg(ref col, d) if d => write!(f, "avg(distinct {})", col),
-            // FunctionExpression::Count(ref col, d) if d => write!(f, "count(distinct {})", col),
-            // FunctionExpression::Sum(ref col, d) if d => write!(f, "sum(distinct {})", col),
-
-            // FunctionExpression::Avg(ref col, _) => write!(f, "avg({})", col),
-            // FunctionExpression::Count(ref col, _) => write!(f, "count({})", col),
-            // FunctionExpression::CountStar => write!(f, "count(*)"),
-            // FunctionExpression::Sum(ref col, _) => write!(f, "sum({})", col),
-            // FunctionExpression::Max(ref col) => write!(f, "max({})", col),
-            // FunctionExpression::Min(ref col) => write!(f, "min({})", col),
-            // FunctionExpression::GroupConcat(ref col, ref s) => {
-            //     write!(f, "group_concat({}, {})", col, s)
-            // }
-            // FunctionExpression::Generic(ref name, ref args) => write!(f, "{}({})", name, args),
         }
     }
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct FunctionArguments {
     pub arguments: Vec<FunctionArgument>,
 }
@@ -75,7 +61,7 @@ impl<'a> From<Vec<FunctionArgument>> for FunctionArguments {
     }
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Column {
     pub name: String,
     pub alias: Option<String>,
