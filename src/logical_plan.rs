@@ -467,28 +467,30 @@ impl From<(ConditionExpression, Relation, RelationalCondition, Schema)> for Sele
                                 schema: value.3,
                             },
                         },
-                        Operator::Or => Selection { 
+                        Operator::Or => Selection {
                             relation: Relation::Union(
                                 Box::new(Relation::Selection(Box::new(Selection {
                                     relation: value.1.clone(),
-                                    condition: RelationalCondition { 
-                                        condition: (*cond_tree.left, value.1.clone()).into(), 
-                                        schema: value.3.clone()
-                                    }
+                                    condition: RelationalCondition {
+                                        condition: (*cond_tree.left, value.1.clone()).into(),
+                                        schema: value.3.clone(),
+                                    },
                                 }))),
                                 Box::new(Relation::Selection(Box::new(Selection {
                                     relation: value.1.clone(),
-                                    condition: RelationalCondition { 
-                                        condition: (*cond_tree.right, value.1.clone()).into(), 
-                                        schema: value.3.clone()
-                                    }
-                                })))
+                                    condition: RelationalCondition {
+                                        condition: (*cond_tree.right, value.1.clone()).into(),
+                                        schema: value.3.clone(),
+                                    },
+                                }))),
                             ),
-                            condition: RelationalCondition { condition: RelationalConditionExpression::None, schema: value.3 }
+                            condition: RelationalCondition {
+                                condition: RelationalConditionExpression::None,
+                                schema: value.3,
+                            },
                         },
                         _ => panic!("not a logical operator"),
-
-                    }
+                    },
                     (None, Some(r)) => Selection {
                         relation: r,
                         condition: RelationalCondition {
@@ -948,7 +950,7 @@ impl TreeNode for Relation {
             Relation::Grouping(group) => {
                 let mut cols = "GROUPING ".to_string();
                 for col in group.columns.iter() {
-                    cols = cols + &format!("{} ", col.name);
+                    cols = cols + col.to_string().as_str() + " ";
                 }
                 let mut branch = parent.add_branch(&cols);
                 group.relation.populate(parent);
@@ -992,30 +994,35 @@ impl TreeNode for Relation {
 impl From<(GroupByClause, Projection, Relation)> for Relation {
     fn from(value: (GroupByClause, Projection, Relation)) -> Self {
         let mut columns = value.0.columns.clone();
-        value.1.values.into_iter().for_each(|x| match x {
+        value.1.values.clone().into_iter().for_each(|x| match x {
             ProjectionValue::Column(col) => match col.function {
                 Some(_) => {
                     columns.push(col.clone());
-                    println!("{:#?}", col)
-                },
+                }
                 None => (),
             },
             ProjectionValue::Expression(_) => (),
         });
         match value.0.having {
-            Some(con) => Relation::Selection(Box::new(Selection {
+            Some(con) => Relation::Projection(Box::new(Projection {
+                relation: Relation::Selection(Box::new(Selection {
+                    relation: Relation::Grouping(Box::new(Grouping {
+                        relation: value.2.clone(),
+                        columns,
+                    })),
+                    condition: RelationalCondition {
+                        condition: (con, value.2.clone()).into(),
+                        schema: value.2.schema(),
+                    },
+                })),
+                values: value.1.values,
+            })),
+            None => Relation::Projection(Box::new(Projection {
                 relation: Relation::Grouping(Box::new(Grouping {
                     relation: value.2.clone(),
                     columns,
                 })),
-                condition: RelationalCondition {
-                    condition: (con, value.2.clone()).into(),
-                    schema: value.2.schema(),
-                },
-            })),
-            None => Relation::Grouping(Box::new(Grouping {
-                relation: value.2.clone(),
-                columns,
+                values: value.1.values,
             })),
         }
     }

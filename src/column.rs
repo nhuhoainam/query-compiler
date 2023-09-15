@@ -127,9 +127,9 @@ impl fmt::Display for Column {
         } else {
             write!(f, "{}", escape_if_keyword(&self.name))?;
         }
-        if let Some(ref alias) = self.alias {
-            write!(f, " AS {}", escape_if_keyword(alias))?;
-        }
+        // if let Some(ref alias) = self.alias {
+        //     write!(f, " AS {}", escape_if_keyword(alias))?;
+        // }
         Ok(())
     }
 }
