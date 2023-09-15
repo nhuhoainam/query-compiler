@@ -320,7 +320,14 @@ pub fn function_arguments(i: &[u8]) -> IResult<&[u8], (FunctionArgument, bool)> 
 }
 
 fn delim_fx_args(i: &[u8]) -> IResult<&[u8], (FunctionArgument, bool)> {
-    delimited(tag("("), function_arguments, tag(")"))(i)
+    preceded(
+        multispace0,
+        delimited(
+            tuple((tag("("), multispace0)),
+            function_arguments,
+            tuple((multispace0, tag(")"))),
+        ),
+    )(i)
 }
 
 fn count_star(i: &[u8]) -> IResult<&[u8], FunctionExpression> {
@@ -362,10 +369,7 @@ pub fn column_function(i: &[u8]) -> IResult<&[u8], FunctionExpression> {
 /// Parse a SQL column identifier in the table.column format
 pub fn column_identifier(i: &[u8]) -> IResult<&[u8], Column> {
     let col_func_no_table = map(pair(column_function, opt(as_alias)), |tup| Column {
-        name: match tup.1 {
-            None => format!("{}", tup.0),
-            Some(a) => String::from(a),
-        },
+        name: format!("{}", tup.0),
         alias: match tup.1 {
             None => None,
             Some(a) => Some(String::from(a)),

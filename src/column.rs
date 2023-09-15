@@ -19,12 +19,12 @@ pub enum FunctionExpression {
 impl fmt::Display for FunctionExpression {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            FunctionExpression::Avg(ref col, _) => write!(f, "{}", col),
-            FunctionExpression::Count(ref col, _) => write!(f, "{}", col),
-            FunctionExpression::CountStar => write!(f, "*"),
-            FunctionExpression::Sum(ref col, _) => write!(f, "{}", col),
-            FunctionExpression::Max(ref col) => write!(f, "{}", col),
-            FunctionExpression::Min(ref col) => write!(f, "{}", col)
+            FunctionExpression::Avg(ref col, _) => write!(f, "AVG({})", col),
+            FunctionExpression::Count(ref col, _) => write!(f, "COUNT({})", col),
+            FunctionExpression::CountStar => write!(f, "COUNT(*)"),
+            FunctionExpression::Sum(ref col, _) => write!(f, "SUM({})", col),
+            FunctionExpression::Max(ref col) => write!(f, "MAX({})", col),
+            FunctionExpression::Min(ref col) => write!(f, "MIN({})", col)
         }
     }
 }

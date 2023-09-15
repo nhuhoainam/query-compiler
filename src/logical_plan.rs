@@ -290,23 +290,24 @@ impl From<(Vec<FieldDefinitionExpression>, Relation)> for Relation {
                         }
                     }
                     FieldDefinitionExpression::Column(ref col) => {
-                        let schema = value.1.schema();
-                        let mut found = false;
-                        for (t, v) in schema {
-                            for c in v {
-                                if c.name == col.name || col.name == format!("{}.{}", t, c.name) {
-                                    values.push(ProjectionValue::Column(col.to_owned()));
-                                    found = true;
-                                    break;
-                                }
-                            }
-                            if found {
-                                break;
-                            }
-                        }
-                        if !found {
-                            panic!("no such column: {}", col.name)
-                        }
+                        // let schema = value.1.schema();
+                        // let mut found = false;
+                        values.push(ProjectionValue::Column(col.to_owned()));
+                        // for (t, v) in schema {
+                        //     for c in v {
+                        //         if c.name == col.name || col.name == format!("{}.{}", t, c.name) {
+                        //             values.push(ProjectionValue::Column(col.to_owned()));
+                        //             found = true;
+                        //             break;
+                        //         }
+                        //     }
+                        //     if found {
+                        //         break;
+                        //     }
+                        // }
+                        // if !found {
+                        //     panic!("no such column: {}", col.name)
+                        // }
                     }
                     FieldDefinitionExpression::FieldValue(val) => {
                         let f = match val {
@@ -992,7 +993,13 @@ impl From<(GroupByClause, Projection, Relation)> for Relation {
     fn from(value: (GroupByClause, Projection, Relation)) -> Self {
         let mut columns = value.0.columns.clone();
         value.1.values.into_iter().for_each(|x| match x {
-            ProjectionValue::Column(col) => columns.push(col),
+            ProjectionValue::Column(col) => match col.function {
+                Some(_) => {
+                    columns.push(col.clone());
+                    println!("{:#?}", col)
+                },
+                None => (),
+            },
             ProjectionValue::Expression(_) => (),
         });
         match value.0.having {
